@@ -18,6 +18,7 @@
 #include "google/cloud/bigtable/admin_client.h"
 #include "google/cloud/bigtable/bigtable_strong_types.h"
 #include "google/cloud/bigtable/column_family.h"
+#include "google/cloud/bigtable/internal/async_check_consistency.h"
 #include "google/cloud/bigtable/internal/async_retry_unary_rpc.h"
 #include "google/cloud/bigtable/metadata_update_policy.h"
 #include "google/cloud/bigtable/polling_policy.h"
@@ -240,6 +241,53 @@ class TableAdmin {
   bool CheckConsistency(bigtable::TableId const& table_id,
                         bigtable::ConsistencyToken const& consistency_token,
                         grpc::Status& status);
+
+  /**
+   * Make an asynchronous request to wait for replication to catch up.
+   *
+   * @param table_id the table to wait on
+   * @param cq the completion queue that will execute the asynchronous calls,
+   *     the application must ensure that one or more threads are blocked on
+   *     `cq.Run()`.
+   * @param callback a functor to be called when the operation completes. It
+   *     must satisfy (using C++17 types):
+   *     static_assert(std::is_invocable_v<
+   *         Functor, grpc::Status const&>);
+   *
+   * @tparam Functor the type of the callback.
+   */
+  template <typename Functor,
+            typename std::enable_if<
+                google::cloud::internal::is_invocable<Functor, CompletionQueue&,
+                                                      grpc::Status&>::value,
+                int>::type valid_callback_type = 0>
+  void AsyncAwaitConsistency(bigtable::TableId const& table_id,
+                             CompletionQueue& cq, Functor&& callback) {
+    google::bigtable::admin::v2::GenerateConsistencyTokenRequest request;
+    request.set_name(TableName(table_id.get()));
+    MetadataUpdatePolicy metadata_update_policy(
+        instance_name(), MetadataParamTypes::NAME, table_id.get());
+
+    static_assert(internal::ExtractMemberFunctionType<decltype(
+                      &AdminClient::AsyncGenerateConsistencyToken)>::value,
+                  "Cannot extract member function type");
+    using MemberFunction =
+        typename internal::ExtractMemberFunctionType<decltype(
+            &AdminClient::AsyncGenerateConsistencyToken)>::MemberFunction;
+    using Retry = internal::AsyncRetryUnaryRpc<
+        AdminClient, MemberFunction, internal::ConstantIdempotencyPolicy,
+        internal::ConsistencyTokenGeneratedFunctor<Functor>>;
+
+    auto retry = std::make_shared<Retry>(
+        __func__, rpc_retry_policy_->clone(), rpc_backoff_policy_->clone(),
+        internal::ConstantIdempotencyPolicy(true), metadata_update_policy,
+        client_, &AdminClient::AsyncGenerateConsistencyToken,
+        std::move(request),
+        internal::ConsistencyTokenGeneratedFunctor<Functor>(
+            __func__, polling_policy_->clone(), metadata_update_policy, client_,
+            TableName(table_id.get()), std::forward<Functor>(callback)));
+    retry->Start(cq);
+  }
 
   void DeleteSnapshot(bigtable::ClusterId const& cluster_id,
                       bigtable::SnapshotId const& snapshot_id,

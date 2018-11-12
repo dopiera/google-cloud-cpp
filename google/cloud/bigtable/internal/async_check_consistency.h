@@ -134,6 +134,69 @@ class AsyncPollCheckConsistency
                                   std::move(table_name))) {}
 };
 
+template <typename Functor,
+          typename std::enable_if<
+              google::cloud::internal::is_invocable<Functor, CompletionQueue&,
+                                                    grpc::Status&>::value,
+              int>::type valid_callback_type = 0>
+class ConsistencyTokenGeneratedFunctor {
+ public:
+  ConsistencyTokenGeneratedFunctor(
+      char const* error_message, std::unique_ptr<PollingPolicy> polling_policy,
+      MetadataUpdatePolicy metadata_update_policy,
+      std::shared_ptr<bigtable::AdminClient> client,
+      std::string const& table_name, Functor&& callback)
+      : error_message_(error_message),
+        polling_policy_(std::move(polling_policy)),
+        metadata_update_policy_(std::move(metadata_update_policy)),
+        client_(std::move(client)),
+        table_name_(table_name),
+        callback_(std::forward<Functor>(callback)) {}
+
+  void operator()(
+      CompletionQueue& cq,
+      google::bigtable::admin::v2::GenerateConsistencyTokenResponse& response,
+      grpc::Status& status) {
+    std::cout << "OUTER status.ok()==" << status.ok()
+              << " response=" << response.consistency_token() << std::endl;
+    if (not status.ok()) {
+      callback_(cq, status);
+      return;
+    }
+    auto callback = std::move(callback_);
+    auto translating_callback = [callback](CompletionQueue& cq, bool response,
+                                           grpc::Status const& status) {
+      std::cout << "status.ok()==" << status.ok() << " response=" << response
+                << std::endl;
+      if (status.ok() && not response) {
+        // I don't think it could happen, TBH.
+        grpc::Status res_status(
+            grpc::StatusCode::UNKNOWN,
+            "The state is not consistent and for some unknown reason we didn't "
+            "reply. That's probably a bug.");
+        callback(cq, res_status);
+        return;
+      }
+      callback(cq, status);
+    };
+    auto op = std::make_shared<
+        AsyncPollCheckConsistency<decltype(translating_callback)>>(
+        __func__, std::move(polling_policy_),
+        std::move(metadata_update_policy_), std::move(client_),
+        ConsistencyToken(std::move(response.consistency_token())),
+        std::move(table_name_), std::move(translating_callback));
+    op->Start(cq);
+  }
+
+ private:
+  char const* error_message_;
+  std::unique_ptr<PollingPolicy> polling_policy_;
+  MetadataUpdatePolicy metadata_update_policy_;
+  std::shared_ptr<bigtable::AdminClient> client_;
+  std::string table_name_;
+  Functor callback_;
+};
+
 }  // namespace internal
 }  // namespace BIGTABLE_CLIENT_NS
 }  // namespace bigtable
