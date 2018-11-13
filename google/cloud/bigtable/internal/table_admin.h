@@ -261,32 +261,16 @@ class TableAdmin {
                 google::cloud::internal::is_invocable<Functor, CompletionQueue&,
                                                       grpc::Status&>::value,
                 int>::type valid_callback_type = 0>
-  void AsyncAwaitConsistency(bigtable::TableId const& table_id,
-                             CompletionQueue& cq, Functor&& callback) {
-    google::bigtable::admin::v2::GenerateConsistencyTokenRequest request;
-    request.set_name(TableName(table_id.get()));
-    MetadataUpdatePolicy metadata_update_policy(
-        instance_name(), MetadataParamTypes::NAME, table_id.get());
-
-    static_assert(internal::ExtractMemberFunctionType<decltype(
-                      &AdminClient::AsyncGenerateConsistencyToken)>::value,
-                  "Cannot extract member function type");
-    using MemberFunction =
-        typename internal::ExtractMemberFunctionType<decltype(
-            &AdminClient::AsyncGenerateConsistencyToken)>::MemberFunction;
-    using Retry = internal::AsyncRetryUnaryRpc<
-        AdminClient, MemberFunction, internal::ConstantIdempotencyPolicy,
-        internal::ConsistencyTokenGeneratedFunctor<Functor>>;
-
-    auto retry = std::make_shared<Retry>(
-        __func__, rpc_retry_policy_->clone(), rpc_backoff_policy_->clone(),
-        internal::ConstantIdempotencyPolicy(true), metadata_update_policy,
-        client_, &AdminClient::AsyncGenerateConsistencyToken,
-        std::move(request),
-        internal::ConsistencyTokenGeneratedFunctor<Functor>(
-            __func__, polling_policy_->clone(), metadata_update_policy, client_,
-            TableName(table_id.get()), std::forward<Functor>(callback)));
-    retry->Start(cq);
+  std::shared_ptr<AsyncOperation> AsyncAwaitConsistency(
+      bigtable::TableId const& table_id, CompletionQueue& cq,
+      Functor&& callback) {
+    auto op = std::make_shared<internal::AsyncAwaitConsistency>(
+        __func__, polling_policy_->clone(), rpc_retry_policy_->clone(),
+        rpc_backoff_policy_->clone(),
+        MetadataUpdatePolicy(instance_name(), MetadataParamTypes::NAME,
+                             table_id.get()),
+        client_, TableName(table_id.get()));
+    return op->Start(cq, callback);
   }
 
   void DeleteSnapshot(bigtable::ClusterId const& cluster_id,
