@@ -47,12 +47,12 @@ class NoexAsyncCheckConsistencyTest : public ::testing::Test {};
 /// @test Verify that TableAdmin::CheckConsistency() works in a simplest case.
 TEST_F(NoexAsyncCheckConsistencyTest, Simple) {
   auto client = std::make_shared<testing::MockAdminClient>();
-  auto impl = std::make_shared<testing::MockCompletionQueue>();
-  bigtable::CompletionQueue cq(impl);
+  auto cq_impl = std::make_shared<testing::MockCompletionQueue>();
+  bigtable::CompletionQueue cq(cq_impl);
 
-  auto reader =
+  auto check_consistency_reader =
       google::cloud::internal::make_unique<MockAsyncCheckConsistencyReader>();
-  EXPECT_CALL(*reader, Finish(_, _, _))
+  EXPECT_CALL(*check_consistency_reader, Finish(_, _, _))
       .WillOnce(Invoke([](btproto::CheckConsistencyResponse* response,
                           grpc::Status* status, void*) {
         response->set_consistent(true);
@@ -60,45 +60,40 @@ TEST_F(NoexAsyncCheckConsistencyTest, Simple) {
       }));
 
   EXPECT_CALL(*client, AsyncCheckConsistency(_, _, _))
-      .WillOnce(
-          Invoke([&reader](grpc::ClientContext*,
+      .WillOnce(Invoke([&check_consistency_reader](
+                           grpc::ClientContext*,
                            btproto::CheckConsistencyRequest const& request,
                            grpc::CompletionQueue*) {
-            EXPECT_EQ("qwerty", request.consistency_token());
-            // This is safe, see comments in MockAsyncResponseReader.
-            return std::unique_ptr<grpc::ClientAsyncResponseReaderInterface<
-                btproto::CheckConsistencyResponse>>(reader.get());
-          }));
+        EXPECT_EQ("qwerty", request.consistency_token());
+        // This is safe, see comments in MockAsyncResponseReader.
+        return std::unique_ptr<grpc::ClientAsyncResponseReaderInterface<
+            btproto::CheckConsistencyResponse>>(check_consistency_reader.get());
+      }));
 
-  // Make the asynchronous request.
-  bool op_called = false;
-  grpc::Status capture_status;
-  auto callback = [&op_called, &capture_status](CompletionQueue& cq,
-                                                bool response,
-                                                grpc::Status const& status) {
+  bool user_op_called = false;
+  auto user_callback = [&user_op_called](CompletionQueue& cq, bool response,
+                                         grpc::Status const& status) {
     EXPECT_TRUE(response);
-    op_called = true;
-    capture_status = status;
+    EXPECT_TRUE(status.ok());
+    EXPECT_EQ("mocked-status", status.error_message());
+    user_op_called = true;
   };
-  using OpType = internal::AsyncPollCheckConsistency<decltype(callback)>;
+  using OpType = internal::AsyncPollCheckConsistency<decltype(user_callback)>;
   auto polling_policy =
       bigtable::DefaultPollingPolicy(internal::kBigtableLimits);
   MetadataUpdatePolicy metadata_update_policy(
       "instance_id", MetadataParamTypes::NAME, "table_id");
   auto op = std::make_shared<OpType>(
       __func__, polling_policy->clone(), metadata_update_policy, client,
-      ConsistencyToken("qwerty"), "table_name", std::move(callback));
+      ConsistencyToken("qwerty"), "table_name", std::move(user_callback));
   op->Start(cq);
 
-  EXPECT_FALSE(op_called);
-  EXPECT_EQ(1U, impl->size());
-  impl->SimulateCompletion(cq, true);
+  EXPECT_FALSE(user_op_called);
+  EXPECT_EQ(1U, cq_impl->size());
+  cq_impl->SimulateCompletion(cq, true);
 
-  EXPECT_TRUE(op_called);
-  EXPECT_TRUE(impl->empty());
-
-  EXPECT_TRUE(capture_status.ok());
-  EXPECT_EQ("mocked-status", capture_status.error_message());
+  EXPECT_TRUE(user_op_called);
+  EXPECT_TRUE(cq_impl->empty());
 }
 
 class NoexAsyncCheckConsistencyRetryTest
@@ -109,12 +104,12 @@ class NoexAsyncCheckConsistencyRetryTest
 TEST_P(NoexAsyncCheckConsistencyRetryTest, OneRetry) {
   bool const fail_first_rpc = GetParam();
   auto client = std::make_shared<testing::MockAdminClient>();
-  auto impl = std::make_shared<testing::MockCompletionQueue>();
-  bigtable::CompletionQueue cq(impl);
+  auto cq_impl = std::make_shared<testing::MockCompletionQueue>();
+  bigtable::CompletionQueue cq(cq_impl);
 
-  auto reader =
+  auto check_consistency_reader =
       google::cloud::internal::make_unique<MockAsyncCheckConsistencyReader>();
-  EXPECT_CALL(*reader, Finish(_, _, _))
+  EXPECT_CALL(*check_consistency_reader, Finish(_, _, _))
       .WillOnce(Invoke([fail_first_rpc](
                            btproto::CheckConsistencyResponse* response,
                            grpc::Status* status, void*) {
@@ -130,62 +125,58 @@ TEST_P(NoexAsyncCheckConsistencyRetryTest, OneRetry) {
       }));
 
   EXPECT_CALL(*client, AsyncCheckConsistency(_, _, _))
-      .WillOnce(
-          Invoke([&reader](grpc::ClientContext*,
+      .WillOnce(Invoke([&check_consistency_reader](
+                           grpc::ClientContext*,
                            btproto::CheckConsistencyRequest const& request,
                            grpc::CompletionQueue*) {
-            EXPECT_EQ("qwerty", request.consistency_token());
-            // This is safe, see comments in MockAsyncResponseReader.
-            return std::unique_ptr<grpc::ClientAsyncResponseReaderInterface<
-                btproto::CheckConsistencyResponse>>(reader.get());
-          }))
-      .WillOnce(
-          Invoke([&reader](grpc::ClientContext*,
+        EXPECT_EQ("qwerty", request.consistency_token());
+        // This is safe, see comments in MockAsyncResponseReader.
+        return std::unique_ptr<grpc::ClientAsyncResponseReaderInterface<
+            btproto::CheckConsistencyResponse>>(check_consistency_reader.get());
+      }))
+      .WillOnce(Invoke([&check_consistency_reader](
+                           grpc::ClientContext*,
                            btproto::CheckConsistencyRequest const& request,
                            grpc::CompletionQueue*) {
-            EXPECT_EQ("qwerty", request.consistency_token());
-            // This is safe, see comments in MockAsyncResponseReader.
-            return std::unique_ptr<grpc::ClientAsyncResponseReaderInterface<
-                btproto::CheckConsistencyResponse>>(reader.get());
-          }));
+        EXPECT_EQ("qwerty", request.consistency_token());
+        // This is safe, see comments in MockAsyncResponseReader.
+        return std::unique_ptr<grpc::ClientAsyncResponseReaderInterface<
+            btproto::CheckConsistencyResponse>>(check_consistency_reader.get());
+      }));
 
   // Make the asynchronous request.
-  bool op_called = false;
-  grpc::Status capture_status;
-  auto callback = [&op_called, &capture_status](CompletionQueue& cq,
-                                                bool response,
-                                                grpc::Status const& status) {
+  bool user_op_called = false;
+  auto user_callback = [&user_op_called](CompletionQueue& cq, bool response,
+                                         grpc::Status const& status) {
+    EXPECT_TRUE(status.ok());
+    EXPECT_EQ("mocked-status", status.error_message());
     EXPECT_TRUE(response);
-    op_called = true;
-    capture_status = status;
+    user_op_called = true;
   };
-  using OpType = internal::AsyncPollCheckConsistency<decltype(callback)>;
+  using OpType = internal::AsyncPollCheckConsistency<decltype(user_callback)>;
   auto polling_policy =
       bigtable::DefaultPollingPolicy(internal::kBigtableLimits);
   MetadataUpdatePolicy metadata_update_policy(
       "instance_id", MetadataParamTypes::NAME, "table_id");
   auto op = std::make_shared<OpType>(
       __func__, polling_policy->clone(), metadata_update_policy, client,
-      ConsistencyToken("qwerty"), "table_name", std::move(callback));
+      ConsistencyToken("qwerty"), "table_name", std::move(user_callback));
   op->Start(cq);
 
-  EXPECT_FALSE(op_called);
-  EXPECT_EQ(1U, impl->size());  // request
-  impl->SimulateCompletion(cq, true);
-  EXPECT_FALSE(op_called);
-  EXPECT_EQ(1U, impl->size());  // timer
+  EXPECT_FALSE(user_op_called);
+  EXPECT_EQ(1U, cq_impl->size());  // request
+  cq_impl->SimulateCompletion(cq, true);
+  EXPECT_FALSE(user_op_called);
+  EXPECT_EQ(1U, cq_impl->size());  // timer
 
-  impl->SimulateCompletion(cq, true);
-  EXPECT_FALSE(op_called);
-  EXPECT_EQ(1U, impl->size());  //  request
+  cq_impl->SimulateCompletion(cq, true);
+  EXPECT_FALSE(user_op_called);
+  EXPECT_EQ(1U, cq_impl->size());  //  request
 
-  impl->SimulateCompletion(cq, true);
+  cq_impl->SimulateCompletion(cq, true);
 
-  EXPECT_TRUE(op_called);
-  EXPECT_TRUE(impl->empty());
-
-  EXPECT_TRUE(capture_status.ok());
-  EXPECT_EQ("mocked-status", capture_status.error_message());
+  EXPECT_TRUE(user_op_called);
+  EXPECT_TRUE(cq_impl->empty());
 }
 
 INSTANTIATE_TEST_CASE_P(OneRetry, NoexAsyncCheckConsistencyRetryTest,
@@ -193,10 +184,10 @@ INSTANTIATE_TEST_CASE_P(OneRetry, NoexAsyncCheckConsistencyRetryTest,
 
 class EndToEndConfig {
  public:
-  grpc::StatusCode error_code1;
-  bool second_call;
-  grpc::StatusCode error_code2;
-  bool finished;
+  grpc::StatusCode generate_token_error_code;
+  bool expect_check_consistency_call;
+  grpc::StatusCode check_consistency_error_code;
+  bool check_consistency_finished;
   grpc::StatusCode expected;
 };
 
@@ -224,113 +215,128 @@ TEST_P(NoexAsyncCheckConsistencyEndToEnd, EndToEnd) {
   auto client = std::make_shared<testing::MockAdminClient>();
   EXPECT_CALL(*client, project()).WillRepeatedly(ReturnRef(kProjectId));
   bigtable::noex::TableAdmin tested(client, kInstanceId, *polling_policy);
-  auto impl = std::make_shared<testing::MockCompletionQueue>();
-  bigtable::CompletionQueue cq(impl);
+  auto cq_impl = std::make_shared<testing::MockCompletionQueue>();
+  bigtable::CompletionQueue cq(cq_impl);
 
-  auto token_reader =
+  auto generate_token_reader =
       google::cloud::internal::make_unique<MockAsyncGenerateConsistencyToken>();
-  EXPECT_CALL(*token_reader, Finish(_, _, _))
+  EXPECT_CALL(*generate_token_reader, Finish(_, _, _))
       .WillOnce(
           Invoke([config](btproto::GenerateConsistencyTokenResponse* response,
                           grpc::Status* status, void*) {
             response->set_consistency_token("qwerty");
-            *status = grpc::Status(config.error_code1, "mocked-status");
+            *status =
+                grpc::Status(config.generate_token_error_code, "mocked-status");
           }));
-  auto reader =
+  auto check_consistency_reader =
       google::cloud::internal::make_unique<MockAsyncCheckConsistencyReader>();
-  if (config.second_call) {
-    EXPECT_CALL(*reader, Finish(_, _, _))
+  if (config.expect_check_consistency_call) {
+    EXPECT_CALL(*check_consistency_reader, Finish(_, _, _))
         .WillOnce(Invoke([config](btproto::CheckConsistencyResponse* response,
                                   grpc::Status* status, void*) {
-          response->set_consistent(config.finished);
-          *status = grpc::Status(config.error_code2, "mocked-status");
+          response->set_consistent(config.check_consistency_finished);
+          *status = grpc::Status(config.check_consistency_error_code,
+                                 "mocked-status");
         }));
   }
 
   EXPECT_CALL(*client, AsyncGenerateConsistencyToken(_, _, _))
       .WillOnce(
-          Invoke([&token_reader](
+          Invoke([&generate_token_reader](
                      grpc::ClientContext*,
                      btproto::GenerateConsistencyTokenRequest const& request,
                      grpc::CompletionQueue*) {
             // This is safe, see comments in MockAsyncResponseReader.
             return std::unique_ptr<grpc::ClientAsyncResponseReaderInterface<
-                btproto::GenerateConsistencyTokenResponse>>(token_reader.get());
+                btproto::GenerateConsistencyTokenResponse>>(
+                generate_token_reader.get());
           }));
-  if (config.second_call) {
+  if (config.expect_check_consistency_call) {
     EXPECT_CALL(*client, AsyncCheckConsistency(_, _, _))
-        .WillOnce(
-            Invoke([&reader](grpc::ClientContext*,
+        .WillOnce(Invoke([&check_consistency_reader](
+                             grpc::ClientContext*,
                              btproto::CheckConsistencyRequest const& request,
                              grpc::CompletionQueue*) {
-              EXPECT_EQ("qwerty", request.consistency_token());
-              // This is safe, see comments in MockAsyncResponseReader.
-              return std::unique_ptr<grpc::ClientAsyncResponseReaderInterface<
-                  btproto::CheckConsistencyResponse>>(reader.get());
-            }));
+          EXPECT_EQ("qwerty", request.consistency_token());
+          // This is safe, see comments in MockAsyncResponseReader.
+          return std::unique_ptr<grpc::ClientAsyncResponseReaderInterface<
+              btproto::CheckConsistencyResponse>>(
+              check_consistency_reader.get());
+        }));
   }
 
   // Make the asynchronous request.
-  bool op_called = false;
-  grpc::Status capture_status;
-  auto callback = [&op_called, &capture_status](CompletionQueue& cq,
-                                                grpc::Status const& status) {
-    op_called = true;
-    capture_status = status;
+  bool user_op_called = false;
+  auto user_callback = [&user_op_called, &config](CompletionQueue& cq,
+                                                  grpc::Status const& status) {
+    user_op_called = true;
+    EXPECT_EQ(config.expected, status.error_code());
   };
-  tested.AsyncAwaitConsistency(kTableId, cq, callback);
+  tested.AsyncAwaitConsistency(kTableId, cq, user_callback);
 
-  EXPECT_FALSE(op_called);
-  EXPECT_EQ(1U, impl->size());  // AsyncGenerateConsistencyToken
-  impl->SimulateCompletion(cq, true);
+  EXPECT_FALSE(user_op_called);
+  EXPECT_EQ(1U, cq_impl->size());  // AsyncGenerateConsistencyToken
+  cq_impl->SimulateCompletion(cq, true);
 
-  if (config.second_call) {
-    EXPECT_FALSE(op_called);
-    EXPECT_EQ(1U, impl->size());  // AsyncCheckConsistency
-    impl->SimulateCompletion(cq, true);
+  if (config.expect_check_consistency_call) {
+    EXPECT_FALSE(user_op_called);
+    EXPECT_EQ(1U, cq_impl->size());  // AsyncCheckConsistency
+    cq_impl->SimulateCompletion(cq, true);
   }
 
-  EXPECT_TRUE(op_called);
-  EXPECT_TRUE(impl->empty());
-
-  EXPECT_EQ(config.expected, capture_status.error_code());
+  EXPECT_TRUE(user_op_called);
+  EXPECT_TRUE(cq_impl->empty());
 }
 
 INSTANTIATE_TEST_CASE_P(
     EndToEnd, NoexAsyncCheckConsistencyEndToEnd,
     ::testing::Values(
         // Everything succeeds immediately.
-        EndToEndConfig{grpc::StatusCode::OK, true, grpc::StatusCode::OK, true,
-                       grpc::StatusCode::OK},
+        EndToEndConfig{.generate_token_error_code = grpc::StatusCode::OK,
+                       .expect_check_consistency_call = true,
+                       .check_consistency_error_code = grpc::StatusCode::OK,
+                       .check_consistency_finished = true,
+                       .expected = grpc::StatusCode::OK},
         // Generating token fails, the error should be propagated.
-        EndToEndConfig{grpc::StatusCode::PERMISSION_DENIED, false,
-                       grpc::StatusCode::UNKNOWN, true,
-                       grpc::StatusCode::PERMISSION_DENIED},
+        EndToEndConfig{
+            .generate_token_error_code = grpc::StatusCode::PERMISSION_DENIED,
+            .expect_check_consistency_call = false,
+            .check_consistency_error_code = grpc::StatusCode::UNKNOWN,
+            .check_consistency_finished = true,
+            .expected = grpc::StatusCode::PERMISSION_DENIED},
         // CheckConsistency times out w.r.t PollingPolicy, UNKNOWN is returned.
-        EndToEndConfig{grpc::StatusCode::OK, true, grpc::StatusCode::OK, false,
-                       grpc::StatusCode::UNKNOWN},
+        EndToEndConfig{.generate_token_error_code = grpc::StatusCode::OK,
+                       .expect_check_consistency_call = true,
+                       .check_consistency_error_code = grpc::StatusCode::OK,
+                       .check_consistency_finished = false,
+                       .expected = grpc::StatusCode::UNKNOWN},
         // CheckConsistency fails. UNKNOWN is returned.
-        EndToEndConfig{grpc::StatusCode::OK, true,
-                       grpc::StatusCode::UNAVAILABLE, false,
-                       grpc::StatusCode::UNAVAILABLE},
-        // CheckConsistency succeeds but reports an error UNKNOWN is returned -
-        // that's a bug simulation
-        EndToEndConfig{grpc::StatusCode::OK, true,
-                       grpc::StatusCode::UNAVAILABLE, true,
-                       grpc::StatusCode::UNAVAILABLE}));
+        EndToEndConfig{
+            .generate_token_error_code = grpc::StatusCode::OK,
+            .expect_check_consistency_call = true,
+            .check_consistency_error_code = grpc::StatusCode::UNAVAILABLE,
+            .check_consistency_finished = false,
+            .expected = grpc::StatusCode::UNAVAILABLE},
+        // CheckConsistency succeeds but reports an error - it is passed on.
+        EndToEndConfig{
+            .generate_token_error_code = grpc::StatusCode::OK,
+            .expect_check_consistency_call = true,
+            .check_consistency_error_code = grpc::StatusCode::UNAVAILABLE,
+            .check_consistency_finished = true,
+            .expected = grpc::StatusCode::UNAVAILABLE}));
 
 class CancelConfig {
  public:
   // Error code returned from GenerateConsistencyToken
-  grpc::StatusCode error_code1;
-  // Whether to call cancel during the first operation.
-  bool cancel1;
+  grpc::StatusCode generate_token_error_code;
+  // Whether to call cancel during GenerateConsistencyToken
+  bool cancel_generate_token;
   // Whether to expect a call to CheckConsistency
-  bool second_call;
+  bool expect_check_consistency_call;
   // Error code returned from CheckConsistency
-  grpc::StatusCode error_code2;
-  // Whether to call cancel during the first operation.
-  bool cancel2;
+  grpc::StatusCode check_consistency_error_code;
+  // Whether to call cancel during CheckConsistency
+  bool cancel_check_consistency;
   grpc::StatusCode expected;
 };
 
@@ -338,7 +344,7 @@ class NoexAsyncCheckConsistencyCancel
     : public bigtable::testing::internal::TableTestFixture,
       public WithParamInterface<CancelConfig> {};
 
-TEST_P(NoexAsyncCheckConsistencyCancel, Simple) {
+TEST_P(NoexAsyncCheckConsistencyCancel, Cancellations) {
   using namespace ::testing;
 
   auto config = GetParam();
@@ -358,114 +364,122 @@ TEST_P(NoexAsyncCheckConsistencyCancel, Simple) {
   auto client = std::make_shared<testing::MockAdminClient>();
   EXPECT_CALL(*client, project()).WillRepeatedly(ReturnRef(kProjectId));
   bigtable::noex::TableAdmin tested(client, kInstanceId, *polling_policy);
-  auto impl = std::make_shared<testing::MockCompletionQueue>();
-  bigtable::CompletionQueue cq(impl);
+  auto cq_impl = std::make_shared<testing::MockCompletionQueue>();
+  bigtable::CompletionQueue cq(cq_impl);
 
-  auto token_reader =
+  auto generate_token_reader =
       google::cloud::internal::make_unique<MockAsyncGenerateConsistencyToken>();
-  EXPECT_CALL(*token_reader, Finish(_, _, _))
+  EXPECT_CALL(*generate_token_reader, Finish(_, _, _))
       .WillOnce(
           Invoke([config](btproto::GenerateConsistencyTokenResponse* response,
                           grpc::Status* status, void*) {
             response->set_consistency_token("qwerty");
-            *status = grpc::Status(config.error_code1, "mocked-status");
+            *status =
+                grpc::Status(config.generate_token_error_code, "mocked-status");
           }));
-  auto reader =
+  auto check_consistency_reader =
       google::cloud::internal::make_unique<MockAsyncCheckConsistencyReader>();
-  if (config.second_call) {
-    EXPECT_CALL(*reader, Finish(_, _, _))
+  if (config.expect_check_consistency_call) {
+    EXPECT_CALL(*check_consistency_reader, Finish(_, _, _))
         .WillOnce(Invoke([config](btproto::CheckConsistencyResponse* response,
                                   grpc::Status* status, void*) {
           response->set_consistent(true);
-          *status = grpc::Status(config.error_code2, "mocked-status");
+          *status = grpc::Status(config.check_consistency_error_code,
+                                 "mocked-status");
         }));
   }
 
   EXPECT_CALL(*client, AsyncGenerateConsistencyToken(_, _, _))
       .WillOnce(
-          Invoke([&token_reader](
+          Invoke([&generate_token_reader](
                      grpc::ClientContext*,
                      btproto::GenerateConsistencyTokenRequest const& request,
                      grpc::CompletionQueue*) {
             // This is safe, see comments in MockAsyncResponseReader.
             return std::unique_ptr<grpc::ClientAsyncResponseReaderInterface<
-                btproto::GenerateConsistencyTokenResponse>>(token_reader.get());
+                btproto::GenerateConsistencyTokenResponse>>(
+                generate_token_reader.get());
           }));
-  if (config.second_call) {
+  if (config.expect_check_consistency_call) {
     EXPECT_CALL(*client, AsyncCheckConsistency(_, _, _))
-        .WillOnce(
-            Invoke([&reader](grpc::ClientContext*,
+        .WillOnce(Invoke([&check_consistency_reader](
+                             grpc::ClientContext*,
                              btproto::CheckConsistencyRequest const& request,
                              grpc::CompletionQueue*) {
-              EXPECT_EQ("qwerty", request.consistency_token());
-              // This is safe, see comments in MockAsyncResponseReader.
-              return std::unique_ptr<grpc::ClientAsyncResponseReaderInterface<
-                  btproto::CheckConsistencyResponse>>(reader.get());
-            }));
+          EXPECT_EQ("qwerty", request.consistency_token());
+          // This is safe, see comments in MockAsyncResponseReader.
+          return std::unique_ptr<grpc::ClientAsyncResponseReaderInterface<
+              btproto::CheckConsistencyResponse>>(
+              check_consistency_reader.get());
+        }));
   }
 
   // Make the asynchronous request.
-  bool op_called = false;
-  grpc::Status capture_status;
-  auto callback = [&op_called, &capture_status](CompletionQueue& cq,
-                                                grpc::Status const& status) {
-    op_called = true;
-    capture_status = status;
+  bool user_op_called = false;
+  auto user_callback = [&user_op_called, &config](CompletionQueue& cq,
+                                                  grpc::Status const& status) {
+    user_op_called = true;
+    EXPECT_EQ(config.expected, status.error_code());
   };
-  auto op = tested.AsyncAwaitConsistency(kTableId, cq, callback);
+  auto op = tested.AsyncAwaitConsistency(kTableId, cq, user_callback);
 
-  EXPECT_FALSE(op_called);
-  EXPECT_EQ(1U, impl->size());  // AsyncGenerateConsistencyToken
-  if (config.cancel1) {
+  EXPECT_FALSE(user_op_called);
+  EXPECT_EQ(1U, cq_impl->size());  // AsyncGenerateConsistencyToken
+  if (config.cancel_generate_token) {
     op->Cancel();
   }
 
-  impl->SimulateCompletion(cq, true);
+  cq_impl->SimulateCompletion(cq, true);
 
-  if (config.second_call) {
-    EXPECT_FALSE(op_called);
-    EXPECT_EQ(1U, impl->size());  // AsyncCheckConsistency
-    if (config.cancel1) {
+  if (config.expect_check_consistency_call) {
+    EXPECT_FALSE(user_op_called);
+    EXPECT_EQ(1U, cq_impl->size());  // AsyncCheckConsistency
+    if (config.cancel_check_consistency) {
       op->Cancel();
     }
-    impl->SimulateCompletion(cq, true);
+    cq_impl->SimulateCompletion(cq, true);
   }
 
-  EXPECT_TRUE(op_called);
-  EXPECT_TRUE(impl->empty());
-
-  EXPECT_EQ(config.expected, capture_status.error_code());
+  EXPECT_TRUE(user_op_called);
+  EXPECT_TRUE(cq_impl->empty());
 }
 
-INSTANTIATE_TEST_CASE_P(CancelTest, NoexAsyncCheckConsistencyCancel,
-                        ::testing::Values(
-                            // Cancel during GenerateConsistencyTokenResponse
-                            // yields the request returning CANCELLED.
-                            CancelConfig{grpc::StatusCode::CANCELLED, true,
-                                         false, grpc::StatusCode::UNKNOWN,
-                                         false, grpc::StatusCode::CANCELLED},
-                            // Cancel during GenerateConsistencyTokenResponse
-                            // yields the request returning OK.
-                            CancelConfig{grpc::StatusCode::OK, true, false,
-                                         grpc::StatusCode::UNKNOWN, false,
-                                         grpc::StatusCode::CANCELLED},
-                            // Cancel during CheckConsistency
-                            // yields the request returning CANCELLED.
-                            CancelConfig{grpc::StatusCode::OK, false, true,
-                                         grpc::StatusCode::CANCELLED, true,
-                                         grpc::StatusCode::CANCELLED},
-                            // Cancel during CheckConsistency
-                            // yields the request returning OK.
-                            CancelConfig{grpc::StatusCode::OK, false, true,
-                                         grpc::StatusCode::OK, true,
-                                         grpc::StatusCode::OK}));
-
-//   grpc::StatusCode error_code1;
-//   bool cancel1;
-//   bool second_call;
-//   grpc::StatusCode error_code2;
-//   bool cancel2;
-//   grpc::StatusCode expected;
+INSTANTIATE_TEST_CASE_P(
+    CancelTest, NoexAsyncCheckConsistencyCancel,
+    ::testing::Values(
+        // Cancel during GenerateConsistencyTokenResponse
+        // yields the request returning CANCELLED.
+        CancelConfig{.generate_token_error_code = grpc::StatusCode::CANCELLED,
+                     .cancel_generate_token = true,
+                     .expect_check_consistency_call = false,
+                     .check_consistency_error_code = grpc::StatusCode::UNKNOWN,
+                     .cancel_check_consistency = false,
+                     .expected = grpc::StatusCode::CANCELLED},
+        // Cancel during GenerateConsistencyTokenResponse
+        // yields the request returning OK.
+        CancelConfig{.generate_token_error_code = grpc::StatusCode::OK,
+                     .cancel_generate_token = true,
+                     .expect_check_consistency_call = false,
+                     .check_consistency_error_code = grpc::StatusCode::UNKNOWN,
+                     .cancel_check_consistency = false,
+                     .expected = grpc::StatusCode::CANCELLED},
+        // Cancel during CheckConsistency
+        // yields the request returning CANCELLED.
+        CancelConfig{
+            .generate_token_error_code = grpc::StatusCode::OK,
+            .cancel_generate_token = false,
+            .expect_check_consistency_call = true,
+            .check_consistency_error_code = grpc::StatusCode::CANCELLED,
+            .cancel_check_consistency = true,
+            .expected = grpc::StatusCode::CANCELLED},
+        // Cancel during CheckConsistency
+        // yields the request returning OK.
+        CancelConfig{.generate_token_error_code = grpc::StatusCode::OK,
+                     .cancel_generate_token = false,
+                     .expect_check_consistency_call = true,
+                     .check_consistency_error_code = grpc::StatusCode::OK,
+                     .cancel_check_consistency = true,
+                     .expected = grpc::StatusCode::OK}));
 
 }  // namespace
 }  // namespace noex
