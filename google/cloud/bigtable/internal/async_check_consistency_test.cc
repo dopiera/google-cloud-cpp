@@ -292,38 +292,66 @@ INSTANTIATE_TEST_CASE_P(
     EndToEnd, NoexAsyncCheckConsistencyEndToEnd,
     ::testing::Values(
         // Everything succeeds immediately.
-        EndToEndConfig{.generate_token_error_code = grpc::StatusCode::OK,
-                       .expect_check_consistency_call = true,
-                       .check_consistency_error_code = grpc::StatusCode::OK,
-                       .check_consistency_finished = true,
-                       .expected = grpc::StatusCode::OK},
+        EndToEndConfig{
+            // Error code which GenerateToken returns.
+            grpc::StatusCode::OK,
+            // Expect that AsyncAwaitConsistency calls CheckConsistency.
+            true,
+            // Error code which CheckConsistency returns.
+            grpc::StatusCode::OK,
+            // CheckConsisteny reports that it's finished.
+            true,
+            // Expected result.
+            grpc::StatusCode::OK},
+        //
         // Generating token fails, the error should be propagated.
         EndToEndConfig{
-            .generate_token_error_code = grpc::StatusCode::PERMISSION_DENIED,
-            .expect_check_consistency_call = false,
-            .check_consistency_error_code = grpc::StatusCode::UNKNOWN,
-            .check_consistency_finished = true,
-            .expected = grpc::StatusCode::PERMISSION_DENIED},
+            // Error code which GenerateToken returns.
+            grpc::StatusCode::PERMISSION_DENIED,
+            // Expect that AsyncAwaitConsistency won't call CheckConsistency.
+            false,
+            // Error code which CheckConsistency returns.
+            grpc::StatusCode::UNKNOWN,
+            // CheckConsisteny reports that it's finished.
+            true,
+            // Expected result.
+            grpc::StatusCode::PERMISSION_DENIED},
         // CheckConsistency times out w.r.t PollingPolicy, UNKNOWN is returned.
-        EndToEndConfig{.generate_token_error_code = grpc::StatusCode::OK,
-                       .expect_check_consistency_call = true,
-                       .check_consistency_error_code = grpc::StatusCode::OK,
-                       .check_consistency_finished = false,
-                       .expected = grpc::StatusCode::UNKNOWN},
+        EndToEndConfig{
+            // Error code which GenerateToken returns.
+            grpc::StatusCode::OK,
+            // Expect that AsyncAwaitConsistency calls CheckConsistency.
+            true,
+            // Error code which CheckConsistency returns.
+            grpc::StatusCode::OK,
+            // CheckConsisteny reports that it's not yet finished.
+            false,
+            // Expected result.
+            grpc::StatusCode::UNKNOWN},
         // CheckConsistency fails. UNKNOWN is returned.
         EndToEndConfig{
-            .generate_token_error_code = grpc::StatusCode::OK,
-            .expect_check_consistency_call = true,
-            .check_consistency_error_code = grpc::StatusCode::UNAVAILABLE,
-            .check_consistency_finished = false,
-            .expected = grpc::StatusCode::UNAVAILABLE},
+            // Error code which GenerateToken returns.
+            grpc::StatusCode::OK,
+            // Expect that AsyncAwaitConsistency calls CheckConsistency.
+            true,
+            // Error code which CheckConsistency returns.
+            grpc::StatusCode::UNAVAILABLE,
+            // CheckConsisteny reports that it's not yet finished.
+            false,
+            // Expected result.
+            grpc::StatusCode::UNAVAILABLE},
         // CheckConsistency succeeds but reports an error - it is passed on.
         EndToEndConfig{
-            .generate_token_error_code = grpc::StatusCode::OK,
-            .expect_check_consistency_call = true,
-            .check_consistency_error_code = grpc::StatusCode::UNAVAILABLE,
-            .check_consistency_finished = true,
-            .expected = grpc::StatusCode::UNAVAILABLE}));
+            // Error code which GenerateToken returns.
+            grpc::StatusCode::OK,
+            // Expect that AsyncAwaitConsistency calls CheckConsistency.
+            true,
+            // Error code which CheckConsistency returns.
+            grpc::StatusCode::UNAVAILABLE,
+            // CheckConsisteny reports that it's finished.
+            true,
+            // Expected result.
+            grpc::StatusCode::UNAVAILABLE}));
 
 class CancelConfig {
  public:
@@ -449,37 +477,62 @@ INSTANTIATE_TEST_CASE_P(
     ::testing::Values(
         // Cancel during GenerateConsistencyTokenResponse
         // yields the request returning CANCELLED.
-        CancelConfig{.generate_token_error_code = grpc::StatusCode::CANCELLED,
-                     .cancel_generate_token = true,
-                     .expect_check_consistency_call = false,
-                     .check_consistency_error_code = grpc::StatusCode::UNKNOWN,
-                     .cancel_check_consistency = false,
-                     .expected = grpc::StatusCode::CANCELLED},
+        CancelConfig{
+            // Error code which GenerateToken returns.
+            grpc::StatusCode::CANCELLED,
+            // Cancel while in GenerateToken.
+            true,
+            // Expect that AsyncAwaitConsistency won't call CheckConsistency.
+            false,
+            // Error code which CheckConsistency returns - irrelevant.
+            grpc::StatusCode::UNKNOWN,
+            // Don't cancel while in CheckConsistency
+            false,
+            // Expected result.
+            grpc::StatusCode::CANCELLED},
         // Cancel during GenerateConsistencyTokenResponse
         // yields the request returning OK.
-        CancelConfig{.generate_token_error_code = grpc::StatusCode::OK,
-                     .cancel_generate_token = true,
-                     .expect_check_consistency_call = false,
-                     .check_consistency_error_code = grpc::StatusCode::UNKNOWN,
-                     .cancel_check_consistency = false,
-                     .expected = grpc::StatusCode::CANCELLED},
+        CancelConfig{
+            // Error code which GenerateToken returns.
+            grpc::StatusCode::OK,
+            // Cancel while in GenerateToken.
+            true,
+            // Expect that AsyncAwaitConsistency won't call CheckConsistency.
+            false,
+            // Error code which CheckConsistency returns - irrelevant.
+            grpc::StatusCode::UNKNOWN,
+            // Don't cancel while in CheckConsistency
+            false,
+            // Expected result.
+            grpc::StatusCode::CANCELLED},
         // Cancel during CheckConsistency
         // yields the request returning CANCELLED.
-        CancelConfig{
-            .generate_token_error_code = grpc::StatusCode::OK,
-            .cancel_generate_token = false,
-            .expect_check_consistency_call = true,
-            .check_consistency_error_code = grpc::StatusCode::CANCELLED,
-            .cancel_check_consistency = true,
-            .expected = grpc::StatusCode::CANCELLED},
+        CancelConfig{// Error code which GenerateToken returns.
+                     grpc::StatusCode::OK,
+                     // Don't cancel GenerateToken.
+                     false,
+                     // Expect that AsyncAwaitConsistency call CheckConsistency.
+                     true,
+                     // Error code which CheckConsistency returns
+                     grpc::StatusCode::CANCELLED,
+                     // Don't cancel while in CheckConsistency
+                     true,
+                     // Expected result.
+                     grpc::StatusCode::CANCELLED},
         // Cancel during CheckConsistency
         // yields the request returning OK.
-        CancelConfig{.generate_token_error_code = grpc::StatusCode::OK,
-                     .cancel_generate_token = false,
-                     .expect_check_consistency_call = true,
-                     .check_consistency_error_code = grpc::StatusCode::OK,
-                     .cancel_check_consistency = true,
-                     .expected = grpc::StatusCode::OK}));
+        CancelConfig{// Error code which GenerateToken returns.
+                     grpc::StatusCode::OK,
+                     // Don't cancel GenerateToken.
+                     false,
+                     // Expect that AsyncAwaitConsistency call CheckConsistency.
+                     true,
+                     // Error code which CheckConsistency returns
+                     grpc::StatusCode::OK,
+                     // Don't cancel while in CheckConsistency
+                     true,
+                     // Expected result.
+                     grpc::StatusCode::OK}));
 
 }  // namespace
 }  // namespace noex
