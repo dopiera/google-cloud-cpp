@@ -81,6 +81,8 @@ class UnwrapCheckAndMutateResponse {
   Functor callback_;
 };
 
+class MutationBatcher;
+
 }  // namespace internal
 
 /**
@@ -520,6 +522,7 @@ class Table {
 
  private:
   FRIEND_TEST(NoexTableStreamingAsyncBulkApplyTest, SimpleTest);
+  friend class internal::MutationBatcher;
   /**
    * Make an asynchronous request to mutate a multiple rows and stream results.
    *
