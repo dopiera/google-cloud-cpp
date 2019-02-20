@@ -416,7 +416,7 @@ class CompletionQueueImpl {
    * @param cq the completion queue wrapping this implementation class, used to
    *   notify any asynchronous operation that completes.
    */
-  void Run(CompletionQueue& cq);
+  void Run(CompletionQueue& cq, bool finish_on_empty = false);
 
   /// Terminate the event loop.
   void Shutdown();
@@ -435,7 +435,7 @@ class CompletionQueueImpl {
   std::shared_ptr<AsyncGrpcOperation> FindOperation(void* tag);
 
   /// Unregister @p tag from pending operations.
-  void ForgetOperation(void* tag);
+  bool ForgetOperation(void* tag);
 
   /// Simulate a completed operation, provided only to support unit tests.
   void SimulateCompletion(CompletionQueue& cq, AsyncOperation* op, bool ok);

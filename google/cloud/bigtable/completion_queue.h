@@ -36,7 +36,7 @@ class CompletionQueue {
    * Note that more than one thread can call this member function, to create a
    * pool of threads completing asynchronous operations.
    */
-  void Run();
+  void Run(bool finish_on_empty = false);
 
   /// Terminate the completion queue event loop.
   void Shutdown();

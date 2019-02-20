@@ -381,7 +381,6 @@ class Table {
     return row;
   }
 
- private:
   noex::Table impl_;
 };
 

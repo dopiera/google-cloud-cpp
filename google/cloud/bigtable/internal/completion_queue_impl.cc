@@ -26,7 +26,7 @@ namespace cloud {
 namespace bigtable {
 inline namespace BIGTABLE_CLIENT_NS {
 namespace internal {
-void CompletionQueueImpl::Run(CompletionQueue& cq) {
+void CompletionQueueImpl::Run(CompletionQueue& cq, bool finish_on_empty) {
   while (!shutdown_.load()) {
     void* tag;
     bool ok;
@@ -44,7 +44,9 @@ void CompletionQueueImpl::Run(CompletionQueue& cq) {
     }
     auto op = FindOperation(tag);
     if (op->Notify(cq, ok)) {
-      ForgetOperation(tag);
+      if (ForgetOperation(tag) && finish_on_empty) {
+        break;
+      }
     }
   }
 }
@@ -84,7 +86,7 @@ std::shared_ptr<AsyncGrpcOperation> CompletionQueueImpl::FindOperation(
   return loc->second;
 }
 
-void CompletionQueueImpl::ForgetOperation(void* tag) {
+bool CompletionQueueImpl::ForgetOperation(void* tag) {
   std::lock_guard<std::mutex> lk(mu_);
   auto const num_erased =
       pending_ops_.erase(reinterpret_cast<std::intptr_t>(tag));
@@ -93,6 +95,7 @@ void CompletionQueueImpl::ForgetOperation(void* tag) {
         "assertion failure: searching for async op tag when trying to "
         "unregister");
   }
+  return pending_ops_.empty();
 }
 
 // This function is used in unit tests to simulate the completion of an

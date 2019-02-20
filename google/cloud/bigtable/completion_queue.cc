@@ -21,7 +21,9 @@ namespace bigtable {
 inline namespace BIGTABLE_CLIENT_NS {
 CompletionQueue::CompletionQueue() : impl_(new internal::CompletionQueueImpl) {}
 
-void CompletionQueue::Run() { impl_->Run(*this); }
+void CompletionQueue::Run(bool finish_on_empty) {
+  impl_->Run(*this, finish_on_empty);
+}
 
 void CompletionQueue::Shutdown() { impl_->Shutdown(); }
 

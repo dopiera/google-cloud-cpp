@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "google/cloud/bigtable/completion_queue.h"
 #include "google/cloud/bigtable/internal/endian.h"
 #include "google/cloud/bigtable/testing/table_integration_test.h"
 #include "google/cloud/internal/getenv.h"
@@ -27,6 +28,8 @@ class DataIntegrationTest : public bigtable::testing::TableIntegrationTest {
   /// Use Table::Apply() to insert a single row.
   void Apply(bigtable::Table& table, std::string row_key,
              std::vector<bigtable::Cell> const& cells);
+  void ApplyHalfAsync(bigtable::Table& table, std::string row_key,
+                      std::vector<bigtable::Cell> const& cells);
 
   /// Use Table::BulkApply() to insert multiple rows.
   void BulkApply(bigtable::Table& table,
@@ -83,7 +86,36 @@ void DataIntegrationTest::Apply(bigtable::Table& table, std::string row_key,
         duration_cast<milliseconds>(microseconds(cell.timestamp())),
         cell.value()));
   }
+  std::cerr << "Interesting bit starts" << std::endl;
   table.Apply(std::move(mutation));
+  std::cerr << "Interesting bit ended" << std::endl;
+}
+
+void DataIntegrationTest::ApplyHalfAsync(
+    bigtable::Table& table, std::string row_key,
+    std::vector<bigtable::Cell> const& cells) {
+  using namespace std::chrono;
+  auto mutation = bigtable::SingleRowMutation(row_key);
+  for (auto const& cell : cells) {
+    mutation.emplace_back(bigtable::SetCell(
+        cell.family_name(), cell.column_qualifier(),
+        duration_cast<milliseconds>(microseconds(cell.timestamp())),
+        cell.value()));
+  }
+  std::cerr << "Interesting bit starts" << std::endl;
+  bigtable::CompletionQueue cq;
+  std::promise<grpc::Status> completion_promise;
+  std::future<grpc::Status> completion_future = completion_promise.get_future();
+  table.impl_.AsyncApply(
+      cq,
+      [&completion_promise](
+          bigtable::CompletionQueue&, google::bigtable::v2::MutateRowResponse&,
+          grpc::Status& status) { completion_promise.set_value(status); },
+      std::move(mutation));
+  cq.Run(true);
+  completion_future.get();
+  cq.Shutdown();
+  std::cerr << "Interesting bit ended" << std::endl;
 }
 
 void DataIntegrationTest::BulkApply(bigtable::Table& table,
@@ -117,6 +149,24 @@ TEST_F(DataIntegrationTest, TableApply) {
       {row_key, family, "c0", 1000, "v1000", {}},
       {row_key, family, "c1", 2000, "v2000", {}}};
   Apply(*table, row_key, created);
+  std::vector<bigtable::Cell> expected{
+      {row_key, family, "c0", 1000, "v1000", {}},
+      {row_key, family, "c1", 2000, "v2000", {}}};
+
+  auto actual = ReadRows(*table, bigtable::Filter::PassAllFilter());
+  EXPECT_STATUS_OK(DeleteTable(table_id));
+  CheckEqualUnordered(expected, actual);
+}
+
+TEST_F(DataIntegrationTest, TableApplyHalfAsync) {
+  std::string const table_id = RandomTableId();
+  auto table = CreateTable(table_id, table_config);
+
+  std::string const row_key = "row-key-1";
+  std::vector<bigtable::Cell> created{
+      {row_key, family, "c0", 1000, "v1000", {}},
+      {row_key, family, "c1", 2000, "v2000", {}}};
+  ApplyHalfAsync(*table, row_key, created);
   std::vector<bigtable::Cell> expected{
       {row_key, family, "c0", 1000, "v1000", {}},
       {row_key, family, "c1", 2000, "v2000", {}}};
