@@ -17,6 +17,7 @@
 
 #include "google/cloud/bigtable/benchmarks/embedded_server.h"
 #include "google/cloud/bigtable/benchmarks/setup.h"
+#include "google/cloud/bigtable/mutation_batcher.h"
 #include "google/cloud/bigtable/table.h"
 #include "google/cloud/internal/random.h"
 #include <chrono>
@@ -124,6 +125,9 @@ class Benchmark {
   /// Populate the table rows in the range [@p begin, @p end)
   BenchmarkResult PopulateTableShard(bigtable::Table& table, long begin,
                                      long end);
+  BenchmarkResult PopulateTableShardWithBatcher(
+      bigtable::CompletionQueue& cq, bigtable::MutationBatcher& batcher,
+      long begin, long end);
 
   /**
    * Return how much space to reserve for digits if the table has @p table_size

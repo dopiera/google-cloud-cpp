@@ -52,6 +52,13 @@ std::string MakeRandomTableId(std::string const& prefix) {
              gen, google::cloud::bigtable::benchmarks::kTableIdRandomLetters,
              table_id_chars);
 }
+
+bool IsTrue(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](char x) { return std::tolower(x); });
+  return value == "true";
+}
+
 }  // anonymous namespace
 
 namespace google {
@@ -74,7 +81,8 @@ BenchmarkSetup::BenchmarkSetup(std::string const& prefix, int& argc,
               << " [thread-count (" << kDefaultThreads << ")]"
               << " [test-duration-seconds (" << kDefaultTestDuration << "min)]"
               << " [table-size (" << kDefaultTableSize << ")]"
-              << " [use-embedded-server (false)]\n";
+              << " [use-embedded-server (false)]"
+              << " [use-mutation-batcher (true)]\n";
     google::cloud::internal::ThrowRuntimeError(msg);
   };
 
@@ -120,10 +128,12 @@ BenchmarkSetup::BenchmarkSetup(std::string const& prefix, int& argc,
   if (argc == 1) {
     return;
   }
-  std::string value = shift();
-  std::transform(value.begin(), value.end(), value.begin(),
-                 [](char x) { return std::tolower(x); });
-  use_embedded_server_ = value == "true";
+  use_embedded_server_ = IsTrue(shift());
+
+  if (argc == 1) {
+    return;
+  }
+  use_batch_mutator_ = IsTrue(shift());
 }
 
 }  // namespace benchmarks

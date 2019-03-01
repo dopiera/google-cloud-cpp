@@ -28,6 +28,7 @@ char arg4[] = "4";
 char arg5[] = "300";
 char arg6[] = "10000";
 char arg7[] = "True";
+char arg8[] = "False";
 }  // anonymous namespace
 
 TEST(BenchmarkTest, Create) {
@@ -50,7 +51,7 @@ TEST(BenchmarkTest, Create) {
 }
 
 TEST(BenchmarkTest, Populate) {
-  char* argv[] = {arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7};
+  char* argv[] = {arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8};
   int argc = sizeof(argv) / sizeof(argv[0]);
   BenchmarkSetup setup("populate", argc, argv);
 
@@ -61,6 +62,24 @@ TEST(BenchmarkTest, Populate) {
   // The magic 10000 comes from arg5 and we accept 5% error.
   EXPECT_GE(int(10000 * 1.05 / kBulkSize), bm.mutate_rows_count());
   EXPECT_LE(int(10000 * 0.95 / kBulkSize), bm.mutate_rows_count());
+  bm.DeleteTable();
+}
+
+TEST(BenchmarkTest, PopulateBatcher) {
+  char* argv[] = {arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7};
+  int argc = sizeof(argv) / sizeof(argv[0]);
+  BenchmarkSetup setup("populate", argc, argv);
+
+  Benchmark bm(setup);
+  bm.CreateTable();
+  EXPECT_EQ(0, bm.mutate_rows_count());
+  auto res = bm.PopulateTable();
+  // Can't test for number of requests because MutationBatcher is unpredictable.
+  // The magic 10000 comes from arg5.
+  EXPECT_EQ(10000, res.row_count);
+  for (auto& op_res : res.operations) {
+    EXPECT_TRUE(op_res.successful);
+  }
   bm.DeleteTable();
 }
 

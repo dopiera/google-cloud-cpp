@@ -26,7 +26,8 @@ char arg4[] = "4";
 char arg5[] = "300";
 char arg6[] = "10000";
 char arg7[] = "True";
-char arg8[] = "Unused";
+char arg8[] = "false";
+char arg9[] = "Unused";
 }  // anonymous namespace
 
 TEST(BenchmarksSetup, Basic) {
@@ -62,7 +63,7 @@ TEST(BenchmarksSetup, Different) {
 }
 
 TEST(BenchmarkSetup, Parse) {
-  char* argv[] = {arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8};
+  char* argv[] = {arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9};
   int argc = sizeof(argv) / sizeof(argv[0]);
   BenchmarkSetup setup("pre", argc, argv);
 
@@ -77,6 +78,15 @@ TEST(BenchmarkSetup, Parse) {
   EXPECT_EQ(300, setup.test_duration().count());
   EXPECT_EQ(10000, setup.table_size());
   EXPECT_TRUE(setup.use_embedded_server());
+  EXPECT_FALSE(setup.use_batch_mutator());
+}
+
+TEST(BenchmarkSetup, Test8) {
+  char* argv[] = {arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8};
+  int argc = sizeof(argv) / sizeof(argv[0]);
+  BenchmarkSetup setup("t6", argc, argv);
+  EXPECT_TRUE(setup.use_embedded_server());
+  EXPECT_FALSE(setup.use_batch_mutator());
 }
 
 TEST(BenchmarkSetup, Test7) {
@@ -138,7 +148,8 @@ TEST(BenchmarkSetup, Test0) {
 
 TEST(BenchmarkSetup, TestDuration) {
   char seconds[] = "0";
-  char* argv[] = {arg0, arg1, arg2, arg3, arg4, seconds, arg6, arg7, arg8};
+  char* argv[] = {arg0,    arg1, arg2, arg3, arg4,
+                  seconds, arg6, arg7, arg8, arg9};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
   // Test duration parameter should be >= 0.
@@ -147,7 +158,8 @@ TEST(BenchmarkSetup, TestDuration) {
 
 TEST(BenchmarkSetup, TableSize) {
   char table_size[] = "10";
-  char* argv[] = {arg0, arg1, arg2, arg3, arg4, arg5, table_size, arg7, arg8};
+  char* argv[] = {arg0, arg1,       arg2, arg3, arg4,
+                  arg5, table_size, arg7, arg8, arg9};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
   // TableSize parameter should be >= 100.

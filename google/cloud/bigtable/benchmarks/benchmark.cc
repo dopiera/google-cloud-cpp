@@ -95,15 +95,27 @@ BenchmarkResult Benchmark::PopulateTable() {
                         setup_.table_id());
   std::cout << "Populating table " << setup_.table_id() << " " << std::flush;
   std::vector<std::future<BenchmarkResult>> tasks;
+  CompletionQueue cq;
+  std::vector<std::thread> cq_runners;
+  for (int i = 0; i != setup_.thread_count(); ++i) {
+    cq_runners.emplace_back([&cq] { cq.Run(); });
+  }
+  bigtable::MutationBatcher batcher(table);
   auto upload_start = std::chrono::steady_clock::now();
   auto table_size = setup_.table_size();
   long shard_start = 0;
   for (int i = 0; i != kPopulateShardCount; ++i) {
     long end =
         std::min(table_size, shard_start + table_size / kPopulateShardCount);
-    tasks.emplace_back(std::async(std::launch::async,
-                                  &Benchmark::PopulateTableShard, this,
-                                  std::ref(table), shard_start, end));
+    if (setup_.use_batch_mutator()) {
+      tasks.emplace_back(std::async(
+          std::launch::async, &Benchmark::PopulateTableShardWithBatcher, this,
+          std::ref(cq), std::ref(batcher), shard_start, end));
+    } else {
+      tasks.emplace_back(std::async(std::launch::async,
+                                    &Benchmark::PopulateTableShard, this,
+                                    std::ref(table), shard_start, end));
+    }
     shard_start = end;
   }
 
@@ -126,6 +138,10 @@ BenchmarkResult Benchmark::PopulateTable() {
   using std::chrono::duration_cast;
   result.elapsed = duration_cast<std::chrono::milliseconds>(
       std::chrono::steady_clock::now() - upload_start);
+  cq.Shutdown();
+  for (auto& thread : cq_runners) {
+    thread.join();
+  }
   std::cout << " DONE. Elapsed=" << FormatDuration(result.elapsed)
             << ", Ops=" << result.operations.size()
             << ", Rows=" << result.row_count << "\n";
@@ -286,6 +302,53 @@ BenchmarkResult Benchmark::PopulateTableShard(bigtable::Table& table,
     result.row_count += bulk_size;
     result.operations.emplace_back(t);
   }
+  using std::chrono::duration_cast;
+  result.elapsed = duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now() - start);
+  return result;
+}
+
+BenchmarkResult Benchmark::PopulateTableShardWithBatcher(
+    bigtable::CompletionQueue& cq, bigtable::MutationBatcher& batcher,
+    long begin, long end) {
+  auto start = std::chrono::steady_clock::now();
+  std::mutex mu;
+  BenchmarkResult result{};
+  result.row_count = 0;
+
+  auto generator = google::cloud::internal::MakeDefaultPRNG();
+
+  long progress_period = (end - begin) / kPopulateShardProgressMarks;
+  if (progress_period == 0) {
+    progress_period = (end - begin);
+  }
+  for (long idx = begin; idx != end; ++idx) {
+    bigtable::SingleRowMutation mutation(MakeKey(idx));
+    std::vector<bigtable::Mutation> columns;
+    for (int f = 0; f != kNumFields; ++f) {
+      mutation.emplace_back(MakeRandomMutation(generator, f));
+    }
+    auto admission_completion = batcher.AsyncApply(cq, std::move(mutation));
+    auto& admission_future = admission_completion.first;
+    auto& completion_future = admission_completion.second;
+
+    auto op_start = std::chrono::steady_clock::now();
+    completion_future.then([op_start, &mu, &result](future<Status> status_fut) {
+      using std::chrono::duration_cast;
+      auto elapsed = duration_cast<std::chrono::microseconds>(
+          std::chrono::steady_clock::now() - op_start);
+      std::lock_guard<std::mutex> lk(mu);
+      result.row_count += 1;
+      result.operations.emplace_back(
+          OperationResult{status_fut.get().ok(), elapsed});
+    });
+    admission_future.get();
+    long count = idx - begin + 1;
+    if (count % progress_period == 0) {
+      std::cout << "." << std::flush;
+    }
+  }
+  batcher.AsyncWaitForNoPendingRequests().get();
   using std::chrono::duration_cast;
   result.elapsed = duration_cast<std::chrono::milliseconds>(
       std::chrono::steady_clock::now() - start);

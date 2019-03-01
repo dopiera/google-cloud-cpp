@@ -46,6 +46,7 @@ class BenchmarkSetup {
   int thread_count() const { return thread_count_; }
   std::chrono::seconds test_duration() const { return test_duration_; }
   bool use_embedded_server() const { return use_embedded_server_; }
+  bool use_batch_mutator() const { return use_batch_mutator_; }
 
  private:
   std::string start_time_;
@@ -59,6 +60,7 @@ class BenchmarkSetup {
   std::chrono::seconds test_duration_ =
       std::chrono::seconds(kDefaultTestDuration * 60);
   bool use_embedded_server_ = false;
+  bool use_batch_mutator_ = true;
 };
 
 }  // namespace benchmarks
