@@ -41,7 +41,7 @@ case ${BENCHMARK} in
     throughput)
         # The magic number 64 here is the number of threads necessary to saturate the CPU
         # on a n1-standard-4 GCE instance (that is 4 vCPUs).
-        "${BTDIR}/benchmarks/apply_read_latency_benchmark" "${PROJECT_ID}" "${INSTANCE_ID}" "${APP_PROFILE_ID}" 64 1800 "False";
+        "${BTDIR}/benchmarks/apply_read_latency_benchmark" "${PROJECT_ID}" "${INSTANCE_ID}" "${APP_PROFILE_ID}" 64 1800 10000000 "False" "False";
         ;;
     throughput_batcher)
         # The magic number 64 here is the number of threads necessary to saturate the CPU
