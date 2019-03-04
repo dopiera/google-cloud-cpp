@@ -74,7 +74,7 @@ class MutationBatcher {
     }
 
     /// MutationBatcher will at most admit mutations of this total size.
-    Options& SetMaxOustandingSize(size_t max_oustanding_size_arg) {
+    Options& SetMaxOustandingSize(std::uint64_t max_oustanding_size_arg) {
       max_oustanding_size = max_oustanding_size_arg;
       return *this;
     }
@@ -82,7 +82,7 @@ class MutationBatcher {
     size_t max_mutations_per_batch;
     size_t max_size_per_batch;
     size_t max_batches;
-    size_t max_oustanding_size;
+    std::uint64_t max_oustanding_size;
   };
 
   MutationBatcher(Table table, Options options = Options())

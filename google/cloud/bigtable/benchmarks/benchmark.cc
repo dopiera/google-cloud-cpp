@@ -100,7 +100,9 @@ BenchmarkResult Benchmark::PopulateTable() {
   for (int i = 0; i != setup_.thread_count(); ++i) {
     cq_runners.emplace_back([&cq] { cq.Run(); });
   }
-  bigtable::MutationBatcher batcher(table);
+  bigtable::MutationBatcher batcher(
+      table, MutationBatcher::Options().SetMaxBatches(40).SetMaxOustandingSize(
+                 1ULL << 34));
   auto upload_start = std::chrono::steady_clock::now();
   auto table_size = setup_.table_size();
   long shard_start = 0;
