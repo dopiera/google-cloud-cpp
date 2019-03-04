@@ -40,7 +40,7 @@ constexpr int kNumFields = 10;
 constexpr int kFieldSize = 100;
 
 /// The size of each BulkApply request.
-constexpr long kBulkSize = 10000;
+constexpr long kBulkSize = 100000;
 
 /// The number of threads running the latency test.
 constexpr int kDefaultThreads = 8;
