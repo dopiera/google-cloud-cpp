@@ -17,6 +17,7 @@
 
 #include "google/cloud/bigtable/async_row_reader.h"
 #include "google/cloud/bigtable/completion_queue.h"
+#include "google/cloud/bigtable/completion_queue_provider.h"
 #include "google/cloud/bigtable/data_client.h"
 #include "google/cloud/bigtable/filters.h"
 #include "google/cloud/bigtable/idempotent_mutation_policy.h"
@@ -833,6 +834,7 @@ class Table {
   std::shared_ptr<RPCBackoffPolicy> rpc_backoff_policy_;
   MetadataUpdatePolicy metadata_update_policy_;
   std::shared_ptr<IdempotentMutationPolicy> idempotent_mutation_policy_;
+  CompletionQueueProvider cq_;
 };
 
 }  // namespace BIGTABLE_CLIENT_NS
