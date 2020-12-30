@@ -252,7 +252,6 @@ void DefaultCompletionQueueImpl::StartOperation(
     // queue is an assertion.
     auto shutdown_guard = shutdown_guard_;
     lk.unlock();
-
     start(tag);
     return;
   }
