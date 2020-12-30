@@ -60,6 +60,9 @@ class LoggingInstanceAdminClient
   }
 
   void reset() override { child_->reset(); }
+  std::unique_ptr<BackgroundThreads> ReleaseBackgroundThreads() override {
+    return child_->ReleaseBackgroundThreads();
+  }
 
   grpc::Status ListInstances(
       grpc::ClientContext* context,
@@ -281,6 +284,8 @@ class LoggingInstanceAdminClient
   AsyncGetOperation(grpc::ClientContext* context,
                     const google::longrunning::GetOperationRequest& request,
                     grpc::CompletionQueue* cq) override;
+
+  ClientOptions const& Options() override { return child_->Options(); }
 
  private:
   std::shared_ptr<google::cloud::bigtable::InstanceAdminClient> child_;

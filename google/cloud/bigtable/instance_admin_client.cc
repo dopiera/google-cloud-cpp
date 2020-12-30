@@ -61,6 +61,10 @@ class DefaultInstanceAdminClient : public InstanceAdminClient {
   std::string const& project() const override { return project_; }
   Impl::ChannelPtr Channel() override { return impl_.Channel(); }
   void reset() override { return impl_.reset(); }
+  ClientOptions const& Options() override { return impl_.Options(); }
+  std::unique_ptr<BackgroundThreads> ReleaseBackgroundThreads() override {
+    return impl_.ReleaseBackgroundThreads();
+  }
 
   grpc::Status ListInstances(
       grpc::ClientContext* context,

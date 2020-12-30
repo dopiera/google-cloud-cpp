@@ -122,14 +122,20 @@ class CommonClient {
   explicit CommonClient(bigtable::ClientOptions options)
       : options_(std::move(options)),
         current_index_(0),
-        background_threads_(
-            google::cloud::internal::DefaultBackgroundThreads(1)),
-        cq_(std::make_shared<CompletionQueue>(background_threads_->cq())),
+        background_threads_(options_.background_threads_factory()()),
+        refresh_cq_(
+            std::make_shared<CompletionQueue>(background_threads_->cq())),
         refresh_state_(std::make_shared<ConnectionRefreshState>(
-            cq_, options_.min_conn_refresh_period(),
+            refresh_cq_, options_.min_conn_refresh_period(),
             options_.max_conn_refresh_period())) {}
 
   ~CommonClient() {
+    if (background_threads_) {
+      GCP_LOG(WARNING)
+          << "CommonClient holds a reference to BackgroundThreads "
+             "upon destruction. This may lead to deadlocks. Consider calling "
+             "ReleaseBackgroundThreads().";
+    }
     // This will stop the refresh of the channels.
     channels_.clear();
     // This will cancel all pending timers.
@@ -165,6 +171,27 @@ class CommonClient {
   }
 
   ClientOptions& Options() { return options_; }
+
+  /**
+   * Release the ownership of background threads running the completion queue.
+   *
+   * The `CommonClient` must not be the owner of the background threads
+   * executing the completion queue associated with it because at some point the
+   * completion queue may hold the last reference to the `CommonClient`. This
+   * is problematic because it could potentially lead to a situation where
+   * `CompletionQueue` would trigger `CommonClient`'s destructor, which in turn
+   * would trigger the same `CompletionQueue`'s destructor, which would be
+   * really hard to handle.
+   *
+   * In order to avoid this cycle, we need the owner of `CommonClient`
+   * object to also own the threads executing its completion queue. For
+   * historic reasons, all connection options are passed to
+   * `CommonClient` rather than the object which holds it, so in order to
+   * respect that we need this member function.
+   */
+  std::unique_ptr<BackgroundThreads> ReleaseBackgroundThreads() {
+    return std::move(background_threads_);
+  }
 
  private:
   /// Make sure the connections exit, and create them if needed.
@@ -217,7 +244,7 @@ class CommonClient {
     if (options_.max_conn_refresh_period().count() == 0) {
       return res;
     }
-    ScheduleChannelRefresh(cq_, refresh_state_, res);
+    ScheduleChannelRefresh(refresh_cq_, refresh_state_, res);
     return res;
   }
 
@@ -252,7 +279,7 @@ class CommonClient {
   // deadlock). We solve both problems by holding only weak pointers to the
   // completion queue in the operations scheduled on it. In order to do it, we
   // need to hold one instance by a shared pointer.
-  std::shared_ptr<CompletionQueue> cq_;
+  std::shared_ptr<CompletionQueue> refresh_cq_;
   std::shared_ptr<ConnectionRefreshState> refresh_state_;
 };
 

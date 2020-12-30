@@ -84,6 +84,9 @@ class InstanceAdminClient {
    */
   virtual void reset() = 0;
 
+  /// The `ClientOptions` this client was created with.
+  virtual ClientOptions const& Options() = 0;
+
   // The member functions of this class are not intended for general use by
   // application developers (they are simply a dependency injection point). Make
   // them protected, so the mock classes can override them, and then make the
@@ -332,6 +335,13 @@ class InstanceAdminClient {
                     const google::longrunning::GetOperationRequest& request,
                     grpc::CompletionQueue* cq) = 0;
   //@}
+
+  /**
+   * Release the ownership of background threads running the completion queue.
+   *
+   * For context, refer to `CommonClient::ReleaseBackgroundThreads`.
+   */
+  virtual std::unique_ptr<BackgroundThreads> ReleaseBackgroundThreads() = 0;
 };
 
 /// Create a new admin client configured via @p options.
