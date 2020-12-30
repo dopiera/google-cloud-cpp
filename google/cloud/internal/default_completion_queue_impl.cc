@@ -139,6 +139,11 @@ class DefaultCompletionQueueImpl::WakeUpRunAsyncOnIdle
   grpc::Alarm alarm_;
 };
 
+DefaultCompletionQueueImpl::DefaultCompletionQueueImpl()
+    : shutdown_guard_(
+          std::shared_ptr<void>(reinterpret_cast<void*>(0xdeadbeef),
+                                [this](void*) { cq_.Shutdown(); })) {}
+
 void DefaultCompletionQueueImpl::Run() {
   class ThreadPoolCount {
    public:
@@ -177,8 +182,8 @@ void DefaultCompletionQueueImpl::Shutdown() {
   {
     std::lock_guard<std::mutex> lk(mu_);
     shutdown_ = true;
+    shutdown_guard_.reset();
   }
-  cq_.Shutdown();
 }
 
 void DefaultCompletionQueueImpl::CancelAll() {
@@ -239,6 +244,15 @@ void DefaultCompletionQueueImpl::StartOperation(
   }
   auto ins = pending_ops_.emplace(tag, std::move(op));
   if (ins.second) {
+    // Do not start the operation with the `CompletionQueue`'s lock held. This
+    // may trigger a deadlock if that operation schedules some more work on the
+    // completion queue (e.g. a timer). We need to delay the underlying
+    // grpc::CompletionQueue::Shutdown until `start` finishes because gRPC's
+    // reaction to trying to schedule some operation on a shut down completion
+    // queue is an assertion.
+    auto shutdown_guard = shutdown_guard_;
+    lk.unlock();
+
     start(tag);
     return;
   }
