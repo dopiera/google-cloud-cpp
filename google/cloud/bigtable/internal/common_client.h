@@ -100,9 +100,6 @@ class CommonClient {
   ~CommonClient() {
     // This will stop the refresh of the channels.
     channels_.clear();
-    // TODO(2567): remove this call when the user will have to provide their own
-    // `CompletionQueues`
-    background_threads_->cq().CancelAll();
   }
 
   /**
