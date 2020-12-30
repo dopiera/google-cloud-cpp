@@ -62,7 +62,7 @@ void EmbeddedServerTestFixture::SetUp() {
   std::shared_ptr<grpc::Channel> admin_channel =
       server_->InProcessChannel(channel_arguments);
   admin_client_ = std::make_shared<InProcessAdminClient>(
-      std::move(project_id), std::move(admin_channel));
+      std::move(project_id), std::move(admin_channel), cq_);
   admin_ = std::make_shared<bigtable::TableAdmin>(admin_client_,
                                                   std::move(instance_id));
 }

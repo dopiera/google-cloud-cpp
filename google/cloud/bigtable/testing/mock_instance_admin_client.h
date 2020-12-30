@@ -29,8 +29,8 @@ class MockInstanceAdminClient : public bigtable::InstanceAdminClient {
 
   // We need to override clang-tidy to not require the `override` keyword here
   // because otherwise clang-3.8 will require `override` in all mocked methods.
-  // NOLINTNEXTLINE(modernize-use-override)
-  CompletionQueue cq() { return cq_; }
+
+  CompletionQueue cq() { return cq_; }  // NOLINT(modernize-use-override)
   MOCK_CONST_METHOD0(project, std::string const&());
   MOCK_METHOD0(Channel, std::shared_ptr<grpc::Channel>());
   MOCK_METHOD0(reset, void());

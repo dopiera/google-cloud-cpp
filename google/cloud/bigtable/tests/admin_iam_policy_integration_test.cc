@@ -61,11 +61,8 @@ TEST_F(AdminIAMPolicyIntegrationTest, AsyncSetGetTestIamAPIsTest) {
                             {"foo", GcRule::MaxAge(std::chrono::hours(24))}},
                            {"a1000", "a2000", "b3000", "m5000"});
 
-  CompletionQueue cq;
-  std::thread pool([&cq] { cq.Run(); });
-
   future<void> chain =
-      table_admin_->AsyncListTables(cq, btadmin::Table::NAME_ONLY)
+      table_admin_->AsyncListTables(btadmin::Table::NAME_ONLY)
           .then([&](future<StatusOr<std::vector<btadmin::Table>>> fut) {
             StatusOr<std::vector<btadmin::Table>> result = fut.get();
             EXPECT_STATUS_OK(result);
@@ -75,36 +72,35 @@ TEST_F(AdminIAMPolicyIntegrationTest, AsyncSetGetTestIamAPIsTest) {
                 << "Table (" << table_id << ") already exists."
                 << " This is unexpected, as the table ids are"
                 << " generated at random.";
-            return table_admin_->AsyncCreateTable(cq, table_id, table_config);
+            return table_admin_->AsyncCreateTable(table_id, table_config);
           })
           .then([&](future<StatusOr<btadmin::Table>> fut) {
             StatusOr<btadmin::Table> result = fut.get();
             EXPECT_STATUS_OK(result);
             EXPECT_THAT(result->name(), ::testing::HasSubstr(table_id));
-            return table_admin_->AsyncSetIamPolicy(cq, table_id, iam_policy);
+            return table_admin_->AsyncSetIamPolicy(table_id, iam_policy);
           })
           .then([&](future<StatusOr<google::iam::v1::Policy>> fut) {
             StatusOr<google::iam::v1::Policy> get_result = fut.get();
             EXPECT_STATUS_OK(get_result);
-            return table_admin_->AsyncGetIamPolicy(cq, table_id);
+            return table_admin_->AsyncGetIamPolicy(table_id);
           })
           .then([&](future<StatusOr<google::iam::v1::Policy>> fut) {
             StatusOr<google::iam::v1::Policy> get_result = fut.get();
             EXPECT_STATUS_OK(get_result);
             return table_admin_->AsyncTestIamPermissions(
-                cq, table_id,
-                {"bigtable.tables.get", "bigtable.tables.readRows"});
+                table_id, {"bigtable.tables.get", "bigtable.tables.readRows"});
           })
           .then([&](future<StatusOr<std::vector<std::string>>> fut) {
             StatusOr<std::vector<std::string>> get_result = fut.get();
             EXPECT_STATUS_OK(get_result);
             EXPECT_EQ(2, get_result->size());
-            return table_admin_->AsyncDeleteTable(cq, table_id);
+            return table_admin_->AsyncDeleteTable(table_id);
           })
           .then([&](future<Status> fut) {
             Status delete_result = fut.get();
             EXPECT_STATUS_OK(delete_result);
-            return table_admin_->AsyncListTables(cq, btadmin::Table::NAME_ONLY);
+            return table_admin_->AsyncListTables(btadmin::Table::NAME_ONLY);
           })
           .then([&](future<StatusOr<std::vector<btadmin::Table>>> fut) {
             StatusOr<std::vector<btadmin::Table>> result = fut.get();
@@ -119,9 +115,6 @@ TEST_F(AdminIAMPolicyIntegrationTest, AsyncSetGetTestIamAPIsTest) {
 
   chain.get();
   SUCCEED();  // we expect that previous operations do not fail.
-
-  cq.Shutdown();
-  pool.join();
 }
 
 /// @test Verify that IAM Policy APIs work as expected.

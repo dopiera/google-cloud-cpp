@@ -274,7 +274,7 @@ class TableAdmin {
    * @snippet table_admin_async_snippets.cc async create table
    */
   future<StatusOr<google::bigtable::admin::v2::Table>> AsyncCreateTable(
-      CompletionQueue& cq, std::string table_id, TableConfig config);
+      std::string table_id, TableConfig config);
 
   /**
    * Return all the tables in the instance.
@@ -332,8 +332,7 @@ class TableAdmin {
    * @snippet table_admin_async_snippets.cc async list tables
    */
   future<StatusOr<std::vector<::google::bigtable::admin::v2::Table>>>
-  AsyncListTables(CompletionQueue& cq,
-                  google::bigtable::admin::v2::Table::View view);
+  AsyncListTables(google::bigtable::admin::v2::Table::View view);
 
   /**
    * Get information about a single table.
@@ -398,7 +397,7 @@ class TableAdmin {
    * @snippet table_admin_async_snippets.cc async get table
    */
   future<StatusOr<google::bigtable::admin::v2::Table>> AsyncGetTable(
-      CompletionQueue& cq, std::string const& table_id,
+      std::string const& table_id,
       google::bigtable::admin::v2::Table::View view);
 
   /**
@@ -450,8 +449,7 @@ class TableAdmin {
    * @par Example
    * @snippet table_admin_async_snippets.cc async delete table
    */
-  future<Status> AsyncDeleteTable(CompletionQueue& cq,
-                                  std::string const& table_id);
+  future<Status> AsyncDeleteTable(std::string const& table_id);
 
   /**
    * Parameters for `CreateBackup` and `AsyncCreateBackup`.
@@ -543,7 +541,7 @@ class TableAdmin {
    *
    */
   future<StatusOr<google::bigtable::admin::v2::Backup>> AsyncCreateBackup(
-      CompletionQueue& cq, CreateBackupParams const& params);
+      CreateBackupParams const& params);
 
   /**
    * Get information about a single backup.
@@ -614,8 +612,7 @@ class TableAdmin {
    */
   // clang-format on
   future<StatusOr<google::bigtable::admin::v2::Backup>> AsyncGetBackup(
-      CompletionQueue& cq, std::string const& cluster_id,
-      std::string const& backup_id);
+      std::string const& cluster_id, std::string const& backup_id);
 
   /**
    * Parameters for `UpdateBackup` and `AsyncUpdateBackup`.
@@ -699,7 +696,7 @@ class TableAdmin {
    *
    */
   future<StatusOr<google::bigtable::admin::v2::Backup>> AsyncUpdateBackup(
-      CompletionQueue& cq, UpdateBackupParams const& params);
+      UpdateBackupParams const& params);
 
   /**
    * Delete a backup.
@@ -785,8 +782,7 @@ class TableAdmin {
    * @par Example
    * @snippet bigtable_table_admin_backup_async_snippets.cc async delete backup
    */
-  future<Status> AsyncDeleteBackup(CompletionQueue& cq,
-                                   std::string const& cluster_id,
+  future<Status> AsyncDeleteBackup(std::string const& cluster_id,
                                    std::string const& backup_id);
 
   /**
@@ -818,7 +814,7 @@ class TableAdmin {
    * @snippet bigtable_table_admin_backup_async_snippets.cc async delete backup
    */
   future<Status> AsyncDeleteBackup(
-      CompletionQueue& cq, google::bigtable::admin::v2::Backup const& backup);
+      google::bigtable::admin::v2::Backup const& backup);
 
   /**
    * Parameters for `ListBackups` and `AsyncListBackups`.
@@ -969,7 +965,7 @@ class TableAdmin {
    *
    */
   future<StatusOr<std::vector<google::bigtable::admin::v2::Backup>>>
-  AsyncListBackups(CompletionQueue& cq, ListBackupsParams const& params);
+  AsyncListBackups(ListBackupsParams const& params);
 
   /**
    * Parameters for `RestoreTable` and `AsyncRestoreTable`.
@@ -1057,7 +1053,7 @@ class TableAdmin {
    *
    */
   future<StatusOr<google::bigtable::admin::v2::Table>> AsyncRestoreTable(
-      CompletionQueue& cq, RestoreTableParams const& params);
+      RestoreTableParams const& params);
 
   /**
    * Modify the schema for an existing table.
@@ -1113,7 +1109,7 @@ class TableAdmin {
    */
   future<StatusOr<::google::bigtable::admin::v2::Table>>
   AsyncModifyColumnFamilies(
-      CompletionQueue& cq, std::string const& table_id,
+      std::string const& table_id,
       std::vector<ColumnFamilyModification> modifications);
 
   /**
@@ -1166,8 +1162,7 @@ class TableAdmin {
    * @par Example
    * @snippet table_admin_async_snippets.cc async drop rows by prefix
    */
-  future<Status> AsyncDropRowsByPrefix(CompletionQueue& cq,
-                                       std::string const& table_id,
+  future<Status> AsyncDropRowsByPrefix(std::string const& table_id,
                                        std::string row_key_prefix);
 
   /**
@@ -1217,7 +1212,7 @@ class TableAdmin {
    * @snippet table_admin_async_snippets.cc async generate consistency token
    */
   future<StatusOr<std::string>> AsyncGenerateConsistencyToken(
-      CompletionQueue& cq, std::string const& table_id);
+      std::string const& table_id);
 
   /**
    * Checks consistency of a table.
@@ -1268,8 +1263,7 @@ class TableAdmin {
    * @snippet table_admin_async_snippets.cc async check consistency
    */
   future<StatusOr<Consistency>> AsyncCheckConsistency(
-      CompletionQueue& cq, std::string const& table_id,
-      std::string const& consistency_token);
+      std::string const& table_id, std::string const& consistency_token);
 
   /**
    * Checks consistency of a table with multiple calls using a separate thread
@@ -1321,8 +1315,7 @@ class TableAdmin {
    * @snippet table_admin_async_snippets.cc async wait for consistency
    */
   google::cloud::future<StatusOr<Consistency>> AsyncWaitForConsistency(
-      CompletionQueue& cq, std::string const& table_id,
-      std::string const& consistency_token);
+      std::string const& table_id, std::string const& consistency_token);
 
   /**
    * Delete all the rows in a table.
@@ -1369,8 +1362,7 @@ class TableAdmin {
    * @par Example
    * @snippet table_admin_async_snippets.cc async drop all rows
    */
-  future<Status> AsyncDropAllRows(CompletionQueue& cq,
-                                  std::string const& table_id);
+  future<Status> AsyncDropAllRows(std::string const& table_id);
 
   /**
    * Gets the policy for @p table_id.
@@ -1435,7 +1427,7 @@ class TableAdmin {
    * @snippet table_admin_iam_policy_snippets.cc async get iam policy
    */
   future<StatusOr<google::iam::v1::Policy>> AsyncGetIamPolicy(
-      CompletionQueue& cq, std::string const& table_id);
+      std::string const& table_id);
 
   /**
    * Sets the IAM policy for a table.
@@ -1522,8 +1514,7 @@ class TableAdmin {
    * @snippet table_admin_iam_policy_snippets.cc async set iam policy
    */
   future<StatusOr<google::iam::v1::Policy>> AsyncSetIamPolicy(
-      CompletionQueue& cq, std::string const& table_id,
-      google::iam::v1::Policy const& iam_policy);
+      std::string const& table_id, google::iam::v1::Policy const& iam_policy);
 
   /**
    * Returns a permission set that the caller has on the specified table.
@@ -1598,8 +1589,7 @@ class TableAdmin {
    *     valid permissions on Google Cloud Bigtable.
    */
   future<StatusOr<std::vector<std::string>>> AsyncTestIamPermissions(
-      CompletionQueue& cq, std::string const& table_id,
-      std::vector<std::string> const& permissions);
+      std::string const& table_id, std::vector<std::string> const& permissions);
 
   /// Return the fully qualified name of a table in this object's instance.
   std::string TableName(std::string const& table_id) const {

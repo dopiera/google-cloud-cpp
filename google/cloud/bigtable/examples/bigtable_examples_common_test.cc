@@ -98,7 +98,7 @@ TEST(BigtableExamplesCommon, CleanupOldTables) {
   std::string const project_id = "test-project-id";
   std::string const instance_id = "test-instance-id";
 
-  auto mock = std::make_shared<MockAdminClient>();
+  auto mock = std::make_shared<MockAdminClient>(CompletionQueue{});
   EXPECT_CALL(*mock, project()).WillRepeatedly(ReturnRef(project_id));
 
   EXPECT_CALL(*mock, ListTables(_, _, _))
@@ -156,7 +156,7 @@ TEST(BigtableExamplesCommon, CleanupOldBackups) {
   *backup_2.mutable_expire_time() =
       TimeUtil::GetCurrentTime() - TimeUtil::HoursToDuration(24 * 8);
 
-  auto mock = std::make_shared<MockAdminClient>();
+  auto mock = std::make_shared<MockAdminClient>(CompletionQueue{});
   EXPECT_CALL(*mock, project()).WillRepeatedly(ReturnRef(project_id));
 
   EXPECT_CALL(*mock, ListBackups(_, _, _))

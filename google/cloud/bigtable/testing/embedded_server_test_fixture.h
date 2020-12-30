@@ -101,6 +101,8 @@ class EmbeddedServerTestFixture : public ::testing::Test {
   static char const kInstanceName[];
   static char const kTableName[];
 
+  CompletionQueue cq_;
+
   std::string project_id_ = kProjectId;
   std::string instance_id_ = kInstanceId;
   std::shared_ptr<DataClient> data_client_;

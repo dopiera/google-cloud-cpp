@@ -57,12 +57,18 @@ std::string const kClusterId = "the-cluster";
 /// A fixture for the bigtable::TableAdmin tests.
 class TableAdminTest : public ::testing::Test {
  protected:
+  TableAdminTest()
+      : cq_impl_(new FakeCompletionQueueImpl),
+        cq_(cq_impl_),
+        client_(std::make_shared<MockAdminClient>(cq_)) {}
+
   void SetUp() override {
     EXPECT_CALL(*client_, project()).WillRepeatedly(ReturnRef(kProjectId));
   }
 
-  std::shared_ptr<MockAdminClient> client_ =
-      std::make_shared<MockAdminClient>();
+  std::shared_ptr<FakeCompletionQueueImpl> cq_impl_;
+  CompletionQueue cq_;
+  std::shared_ptr<MockAdminClient> client_;
 };
 
 // A lambda to create lambdas.  Basically we would be rewriting the same
@@ -1227,11 +1233,8 @@ TEST_F(TableAdminTest, AsyncWaitForConsistencySimple) {
       .WillOnce(make_invoke(r2))
       .WillOnce(make_invoke(r3));
 
-  std::shared_ptr<FakeCompletionQueueImpl> cq_impl(new FakeCompletionQueueImpl);
-  CompletionQueue cq(cq_impl);
-
   google::cloud::future<google::cloud::StatusOr<Consistency>> result =
-      tested.AsyncWaitForConsistency(cq, "test-table", "test-async-token");
+      tested.AsyncWaitForConsistency("test-table", "test-async-token");
 
   // The future is not ready yet.
   auto future_status = result.wait_for(0_ms);
@@ -1240,27 +1243,27 @@ TEST_F(TableAdminTest, AsyncWaitForConsistencySimple) {
   // Simulate the completions for each event.
 
   // AsyncCheckConsistency() -> TRANSIENT
-  cq_impl->SimulateCompletion(true);
+  cq_impl_->SimulateCompletion(true);
   future_status = result.wait_for(0_ms);
   EXPECT_EQ(std::future_status::timeout, future_status);
 
   // timer
-  cq_impl->SimulateCompletion(true);
+  cq_impl_->SimulateCompletion(true);
   future_status = result.wait_for(0_ms);
   EXPECT_EQ(std::future_status::timeout, future_status);
 
   // AsyncCheckConsistency() -> !consistent
-  cq_impl->SimulateCompletion(true);
+  cq_impl_->SimulateCompletion(true);
   future_status = result.wait_for(0_ms);
   EXPECT_EQ(std::future_status::timeout, future_status);
 
   // timer
-  cq_impl->SimulateCompletion(true);
+  cq_impl_->SimulateCompletion(true);
   future_status = result.wait_for(0_ms);
   EXPECT_EQ(std::future_status::timeout, future_status);
 
   // AsyncCheckConsistency() -> consistent
-  cq_impl->SimulateCompletion(true);
+  cq_impl_->SimulateCompletion(true);
   future_status = result.wait_for(0_ms);
   ASSERT_EQ(std::future_status::ready, future_status);
 
@@ -1302,16 +1305,13 @@ TEST_F(TableAdminTest, AsyncWaitForConsistencyFailure) {
             btadmin::CheckConsistencyResponse>>(reader.get());
       });
 
-  std::shared_ptr<FakeCompletionQueueImpl> cq_impl(new FakeCompletionQueueImpl);
-  CompletionQueue cq(cq_impl);
-
   google::cloud::future<google::cloud::StatusOr<Consistency>> result =
-      tested.AsyncWaitForConsistency(cq, "test-table", "test-async-token");
+      tested.AsyncWaitForConsistency("test-table", "test-async-token");
 
   // The future is not ready yet.
   auto future_status = result.wait_for(0_ms);
   EXPECT_EQ(std::future_status::timeout, future_status);
-  cq_impl->SimulateCompletion(true);
+  cq_impl_->SimulateCompletion(true);
 
   // The future becomes ready on the first request that completes with a
   // permanent error.
@@ -1330,7 +1330,7 @@ class ValidContextMdAsyncTest : public ::testing::Test {
   ValidContextMdAsyncTest()
       : cq_impl_(new FakeCompletionQueueImpl),
         cq_(cq_impl_),
-        client_(new MockAdminClient) {
+        client_(new MockAdminClient(cq_)) {
     EXPECT_CALL(*client_, project())
         .WillRepeatedly(::testing::ReturnRef(kProjectId));
     table_admin_ = absl::make_unique<TableAdmin>(client_, kInstanceId);
@@ -1375,7 +1375,7 @@ TEST_F(ValidContextMdAsyncTest, AsyncCreateTable) {
             table: {}
           )pb",
           "google.bigtable.admin.v2.BigtableTableAdmin.CreateTable"));
-  FinishTest(table_admin_->AsyncCreateTable(cq_, "the-table", TableConfig()));
+  FinishTest(table_admin_->AsyncCreateTable("the-table", TableConfig()));
 }
 
 TEST_F(ValidContextMdAsyncTest, AsyncDeleteTable) {
@@ -1388,7 +1388,7 @@ TEST_F(ValidContextMdAsyncTest, AsyncDeleteTable) {
             name: "projects/the-project/instances/the-instance/tables/the-table"
           )pb",
           "google.bigtable.admin.v2.BigtableTableAdmin.DeleteTable"));
-  FinishTest(table_admin_->AsyncDeleteTable(cq_, "the-table"));
+  FinishTest(table_admin_->AsyncDeleteTable("the-table"));
 }
 
 TEST_F(ValidContextMdAsyncTest, AsyncCreateBackup) {
@@ -1413,7 +1413,7 @@ TEST_F(ValidContextMdAsyncTest, AsyncCreateBackup) {
   TableAdmin::CreateBackupParams backup_config(
       "the-cluster", "the-backup", "the-table",
       google::cloud::internal::ToChronoTimePoint(expire_time));
-  FinishTest(table_admin_->AsyncCreateBackup(cq_, backup_config));
+  FinishTest(table_admin_->AsyncCreateBackup(backup_config));
 }
 
 TEST_F(ValidContextMdAsyncTest, AsyncRestoreTable) {
@@ -1431,7 +1431,7 @@ TEST_F(ValidContextMdAsyncTest, AsyncRestoreTable) {
           "google.bigtable.admin.v2.BigtableTableAdmin.RestoreTable"));
   bigtable::TableAdmin::RestoreTableParams params("restored-table",
                                                   "the-cluster", "the-backup");
-  FinishTest(table_admin_->AsyncRestoreTable(cq_, std::move(params)));
+  FinishTest(table_admin_->AsyncRestoreTable(std::move(params)));
 }
 
 TEST_F(ValidContextMdAsyncTest, AsyncDropAllRows) {
@@ -1445,7 +1445,7 @@ TEST_F(ValidContextMdAsyncTest, AsyncDropAllRows) {
             delete_all_data_from_table: true
           )pb",
           "google.bigtable.admin.v2.BigtableTableAdmin.DropRowRange"));
-  FinishTest(table_admin_->AsyncDropAllRows(cq_, "the-table"));
+  FinishTest(table_admin_->AsyncDropAllRows("the-table"));
 }
 
 TEST_F(ValidContextMdAsyncTest, AsyncDropRowsByPrefix) {
@@ -1459,7 +1459,7 @@ TEST_F(ValidContextMdAsyncTest, AsyncDropRowsByPrefix) {
             row_key_prefix: "prefix"
           )pb",
           "google.bigtable.admin.v2.BigtableTableAdmin.DropRowRange"));
-  FinishTest(table_admin_->AsyncDropRowsByPrefix(cq_, "the-table", "prefix"));
+  FinishTest(table_admin_->AsyncDropRowsByPrefix("the-table", "prefix"));
 }
 
 TEST_F(ValidContextMdAsyncTest, AsyncGenerateConsistencyToken) {
@@ -1474,7 +1474,7 @@ TEST_F(ValidContextMdAsyncTest, AsyncGenerateConsistencyToken) {
           )pb",
           "google.bigtable.admin.v2.BigtableTableAdmin."
           "GenerateConsistencyToken"));
-  FinishTest(table_admin_->AsyncGenerateConsistencyToken(cq_, "the-table"));
+  FinishTest(table_admin_->AsyncGenerateConsistencyToken("the-table"));
 }
 
 TEST_F(ValidContextMdAsyncTest, AsyncListTables) {
@@ -1488,7 +1488,7 @@ TEST_F(ValidContextMdAsyncTest, AsyncListTables) {
             view: SCHEMA_VIEW
           )pb",
           "google.bigtable.admin.v2.BigtableTableAdmin.ListTables"));
-  FinishTest(table_admin_->AsyncListTables(cq_, btadmin::Table::SCHEMA_VIEW));
+  FinishTest(table_admin_->AsyncListTables(btadmin::Table::SCHEMA_VIEW));
 }
 
 TEST_F(ValidContextMdAsyncTest, AsyncModifyColumnFamilies) {
@@ -1501,7 +1501,7 @@ TEST_F(ValidContextMdAsyncTest, AsyncModifyColumnFamilies) {
             name: "projects/the-project/instances/the-instance/tables/the-table"
           )pb",
           "google.bigtable.admin.v2.BigtableTableAdmin.ModifyColumnFamilies"));
-  FinishTest(table_admin_->AsyncModifyColumnFamilies(cq_, "the-table", {}));
+  FinishTest(table_admin_->AsyncModifyColumnFamilies("the-table", {}));
 }
 
 using MockAsyncIamPolicyReader =
@@ -1513,7 +1513,7 @@ class AsyncGetIamPolicyTest : public ::testing::Test {
   AsyncGetIamPolicyTest()
       : cq_impl_(new FakeCompletionQueueImpl),
         cq_(cq_impl_),
-        client_(new MockAdminClient),
+        client_(new MockAdminClient(cq_)),
         reader_(new MockAsyncIamPolicyReader) {
     EXPECT_CALL(*client_, project()).WillRepeatedly(ReturnRef(kProjectId));
     EXPECT_CALL(*client_, AsyncGetIamPolicy(_, _, _))
@@ -1536,7 +1536,7 @@ class AsyncGetIamPolicyTest : public ::testing::Test {
  protected:
   void Start() {
     TableAdmin table_admin(client_, "the-instance");
-    user_future_ = table_admin.AsyncGetIamPolicy(cq_, "the-table");
+    user_future_ = table_admin.AsyncGetIamPolicy("the-table");
   }
 
   std::shared_ptr<FakeCompletionQueueImpl> cq_impl_;
@@ -1601,7 +1601,7 @@ class AsyncSetIamPolicyTest : public ::testing::Test {
   AsyncSetIamPolicyTest()
       : cq_impl_(new FakeCompletionQueueImpl),
         cq_(cq_impl_),
-        client_(new MockAdminClient),
+        client_(new MockAdminClient(cq_)),
         reader_(new MockAsyncSetIamPolicyReader) {
     EXPECT_CALL(*client_, project()).WillRepeatedly(ReturnRef(kProjectId));
     EXPECT_CALL(*client_, AsyncSetIamPolicy(_, _, _))
@@ -1625,7 +1625,7 @@ class AsyncSetIamPolicyTest : public ::testing::Test {
   void Start() {
     TableAdmin table_admin(client_, "the-instance");
     user_future_ = table_admin.AsyncSetIamPolicy(
-        cq_, "the-table",
+        "the-table",
         IamPolicy({IamBinding("writer", {"abc@gmail.com", "xyz@gmail.com"})},
                   "test-tag", 0));
   }
@@ -1697,7 +1697,7 @@ class AsyncTestIamPermissionsTest : public ::testing::Test {
   AsyncTestIamPermissionsTest()
       : cq_impl_(new FakeCompletionQueueImpl),
         cq_(cq_impl_),
-        client_(new MockAdminClient),
+        client_(new MockAdminClient(cq_)),
         reader_(new MockAsyncTestIamPermissionsReader) {
     EXPECT_CALL(*client_, project()).WillRepeatedly(ReturnRef(kProjectId));
     EXPECT_CALL(*client_, AsyncTestIamPermissions(_, _, _))
@@ -1723,7 +1723,7 @@ class AsyncTestIamPermissionsTest : public ::testing::Test {
   void Start(std::vector<std::string> const& permissions) {
     TableAdmin table_admin(client_, "the-instance");
     user_future_ =
-        table_admin.AsyncTestIamPermissions(cq_, "the-table", permissions);
+        table_admin.AsyncTestIamPermissions("the-table", permissions);
   }
 
   std::shared_ptr<FakeCompletionQueueImpl> cq_impl_;

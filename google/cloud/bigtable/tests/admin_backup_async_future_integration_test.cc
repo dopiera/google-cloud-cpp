@@ -66,9 +66,6 @@ class AdminBackupAsyncFutureIntegrationTest
 TEST_F(AdminBackupAsyncFutureIntegrationTest,
        CreateListGetUpdateRestoreDeleteBackup) {
   std::string const table_id = RandomTableId();
-  CompletionQueue cq;
-  std::thread pool([&cq] { cq.Run(); });
-
   // verify new table id in current table list
   auto previous_table_list =
       table_admin_->ListTables(btadmin::Table::NAME_ONLY);
@@ -105,7 +102,7 @@ TEST_F(AdminBackupAsyncFutureIntegrationTest,
       expire_time + google::protobuf::util::TimeUtil::HoursToDuration(12);
 
   future<void> chain =
-      table_admin_->AsyncListBackups(cq, {})
+      table_admin_->AsyncListBackups({})
           .then([&](future<StatusOr<std::vector<btadmin::Backup>>> fut) {
             StatusOr<std::vector<btadmin::Backup>> result = fut.get();
             EXPECT_STATUS_OK(result);
@@ -116,42 +113,41 @@ TEST_F(AdminBackupAsyncFutureIntegrationTest,
                 << " This is unexpected, as the backup ids are"
                 << " generated at random.";
             return table_admin_->AsyncCreateBackup(
-                cq, {backup_cluster_id, backup_id, table_id,
-                     google::cloud::internal::ToChronoTimePoint(expire_time)});
+                {backup_cluster_id, backup_id, table_id,
+                 google::cloud::internal::ToChronoTimePoint(expire_time)});
           })
           .then([&](future<StatusOr<btadmin::Backup>> fut) {
             StatusOr<btadmin::Backup> result = fut.get();
             EXPECT_STATUS_OK(result);
             EXPECT_THAT(result->name(), ::testing::HasSubstr(backup_id));
-            return table_admin_->AsyncGetBackup(cq, backup_cluster_id,
-                                                backup_id);
+            return table_admin_->AsyncGetBackup(backup_cluster_id, backup_id);
           })
           .then([&](future<StatusOr<btadmin::Backup>> fut) {
             StatusOr<btadmin::Backup> get_result = fut.get();
             EXPECT_STATUS_OK(get_result);
             EXPECT_EQ(get_result->name(), backup_full_name);
             return table_admin_->AsyncUpdateBackup(
-                cq, {backup_cluster_id, backup_id,
-                     google::cloud::internal::ToChronoTimePoint(
-                         updated_expire_time)});
+                {backup_cluster_id, backup_id,
+                 google::cloud::internal::ToChronoTimePoint(
+                     updated_expire_time)});
           })
           .then([&](future<StatusOr<btadmin::Backup>> fut) {
             StatusOr<btadmin::Backup> update_result = fut.get();
             EXPECT_STATUS_OK(update_result);
             EXPECT_EQ(update_result->name(), backup_full_name);
             EXPECT_EQ(update_result->expire_time(), updated_expire_time);
-            return table_admin_->AsyncDeleteTable(cq, table_id);
+            return table_admin_->AsyncDeleteTable(table_id);
           })
           .then([&](future<Status> fut) {
             Status delete_table_result = fut.get();
             EXPECT_STATUS_OK(delete_table_result);
             return table_admin_->AsyncRestoreTable(
-                cq, {table_id, backup_cluster_id, backup_id});
+                {table_id, backup_cluster_id, backup_id});
           })
           .then([&](future<StatusOr<btadmin::Table>> fut) {
             auto restore_result = fut.get();
             EXPECT_STATUS_OK(restore_result);
-            return table_admin_->AsyncDeleteBackup(cq, backup_cluster_id,
+            return table_admin_->AsyncDeleteBackup(backup_cluster_id,
                                                    backup_id);
           })
           .then([&](future<Status> fut) {
@@ -171,9 +167,6 @@ TEST_F(AdminBackupAsyncFutureIntegrationTest,
   EXPECT_STATUS_OK(table_admin_->DeleteTable(table_id));
 
   SUCCEED();  // we expect that previous operations do not fail.
-
-  cq.Shutdown();
-  pool.join();
 }
 
 }  // namespace
