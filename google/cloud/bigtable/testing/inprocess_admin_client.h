@@ -46,6 +46,7 @@ class InProcessAdminClient : public bigtable::AdminClient {
 
   std::string const& project() const override { return project_; }
   std::shared_ptr<grpc::Channel> Channel() override { return channel_; }
+  ClientOptions const& Options() override { return options_; }
   void reset() override {}
 
   //@{
@@ -231,6 +232,7 @@ class InProcessAdminClient : public bigtable::AdminClient {
  private:
   std::string project_;
   std::shared_ptr<grpc::Channel> channel_;
+  ClientOptions options_;
 };
 
 }  // namespace testing

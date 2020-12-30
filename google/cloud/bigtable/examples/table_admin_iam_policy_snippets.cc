@@ -132,10 +132,6 @@ void RunAll(std::vector<std::string> const& argv) {
       cbt::CreateDefaultAdminClient(project_id, cbt::ClientOptions{}),
       instance_id);
 
-  google::cloud::CompletionQueue cq;
-  std::thread th([&cq] { cq.Run(); });
-  examples::AutoShutdownCQ shutdown(cq, std::move(th));
-
   // If a previous run of these samples crashes before cleaning up there may be
   // old tables left over. As there are quotas on the total number of tables we
   // remove stale tables after 48 hours.

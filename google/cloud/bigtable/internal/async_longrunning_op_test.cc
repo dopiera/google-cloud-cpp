@@ -58,9 +58,10 @@ class AsyncLongrunningOpFutureTest : public bigtable::testing::TableTestFixture,
 
 TEST_P(AsyncLongrunningOpFutureTest, EndToEnd) {
   auto const success = GetParam();
-  auto client = std::make_shared<testing::MockAdminClient>();
   auto cq_impl = std::make_shared<FakeCompletionQueueImpl>();
   bigtable::CompletionQueue cq(cq_impl);
+  auto client = std::make_shared<testing::MockAdminClient>(
+      ClientOptions().DisableBackgroundThreads(cq));
 
   auto longrunning_reader = absl::make_unique<MockAsyncLongrunningOpReader>();
   EXPECT_CALL(*longrunning_reader, Finish(_, _, _))
@@ -122,9 +123,10 @@ INSTANTIATE_TEST_SUITE_P(EndToEnd, AsyncLongrunningOpFutureTest,
 class AsyncLongrunningOperationTest : public ::testing::Test {
  public:
   AsyncLongrunningOperationTest()
-      : client_(std::make_shared<testing::MockAdminClient>()),
-        cq_impl_(std::make_shared<FakeCompletionQueueImpl>()),
+      : cq_impl_(std::make_shared<FakeCompletionQueueImpl>()),
         cq_(cq_impl_),
+        client_(std::make_shared<testing::MockAdminClient>(
+            ClientOptions().DisableBackgroundThreads(cq_))),
         longrunning_reader_(absl::make_unique<MockAsyncLongrunningOpReader>()),
         context_(new grpc::ClientContext) {}
 
@@ -171,9 +173,9 @@ class AsyncLongrunningOperationTest : public ::testing::Test {
     return fut.get();
   }
 
-  std::shared_ptr<testing::MockAdminClient> client_;
   std::shared_ptr<FakeCompletionQueueImpl> cq_impl_;
   bigtable::CompletionQueue cq_;
+  std::shared_ptr<testing::MockAdminClient> client_;
   std::unique_ptr<MockAsyncLongrunningOpReader> longrunning_reader_;
   std::unique_ptr<grpc::ClientContext> context_;
 };

@@ -506,7 +506,6 @@ class InstanceAdmin {
   GOOGLE_CLOUD_CPP_BIGTABLE_ADMIN_ASYNC_DEPRECATED
   future<Status> AsyncDeleteInstance(std::string const& instance_id);
 
-
   /**
    * Obtain the list of clusters in an instance.
    *

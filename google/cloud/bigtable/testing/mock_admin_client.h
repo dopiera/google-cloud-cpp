@@ -25,6 +25,14 @@ namespace testing {
 
 class MockAdminClient : public bigtable::AdminClient {
  public:
+  explicit MockAdminClient(ClientOptions options = {})
+      : options_(std::move(options)) {}
+
+  // We need to override clang-tidy to not require the `override` keyword here
+  // because otherwise clang-3.8 will require `override` in all mocked methods.
+  // NOLINTNEXTLINE(modernize-use-override)
+  ClientOptions const& Options() { return options_; }
+
   MOCK_CONST_METHOD0(project, std::string const&());
   MOCK_METHOD0(Channel, std::shared_ptr<grpc::Channel>());
   MOCK_METHOD0(reset, void());
@@ -253,6 +261,9 @@ class MockAdminClient : public bigtable::AdminClient {
                    grpc::ClientContext* context,
                    const google::longrunning::GetOperationRequest& request,
                    grpc::CompletionQueue* cq));
+
+ private:
+  ClientOptions options_;
 };
 
 }  // namespace testing

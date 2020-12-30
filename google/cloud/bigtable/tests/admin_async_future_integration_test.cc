@@ -63,9 +63,6 @@ TEST_F(AdminAsyncFutureIntegrationTest, CreateListGetDeleteTableTest) {
 
   std::string const table_id = RandomTableId();
 
-  CompletionQueue cq;
-  std::thread pool([&cq] { cq.Run(); });
-
   // AsyncCreateTable()
   TableConfig table_config({{"fam", GcRule::MaxNumVersions(5)},
                             {"foo", GcRule::MaxAge(std::chrono::hours(24))}},
@@ -83,7 +80,7 @@ TEST_F(AdminAsyncFutureIntegrationTest, CreateListGetDeleteTableTest) {
   };
 
   future<void> chain =
-      table_admin_->AsyncListTables(cq, btadmin::Table::NAME_ONLY)
+      table_admin_->AsyncListTables(btadmin::Table::NAME_ONLY)
           .then([&](future<StatusOr<std::vector<btadmin::Table>>> fut) {
             StatusOr<std::vector<btadmin::Table>> result = fut.get();
             EXPECT_STATUS_OK(result);
@@ -93,14 +90,13 @@ TEST_F(AdminAsyncFutureIntegrationTest, CreateListGetDeleteTableTest) {
                 << "Table (" << table_id << ") already exists."
                 << " This is unexpected, as the table ids are"
                 << " generated at random.";
-            return table_admin_->AsyncCreateTable(cq, table_id, table_config);
+            return table_admin_->AsyncCreateTable(table_id, table_config);
           })
           .then([&](future<StatusOr<btadmin::Table>> fut) {
             StatusOr<btadmin::Table> result = fut.get();
             EXPECT_STATUS_OK(result);
             EXPECT_THAT(result->name(), ::testing::HasSubstr(table_id));
-            return table_admin_->AsyncGetTable(cq, table_id,
-                                               btadmin::Table::FULL);
+            return table_admin_->AsyncGetTable(table_id, btadmin::Table::FULL);
           })
           .then([&](future<StatusOr<btadmin::Table>> fut) {
             StatusOr<btadmin::Table> get_result = fut.get();
@@ -121,7 +117,7 @@ TEST_F(AdminAsyncFutureIntegrationTest, CreateListGetDeleteTableTest) {
                         "fam", GcRule::MaxNumVersions(2)),
                     bigtable::ColumnFamilyModification::Drop("foo")};
             return table_admin_->AsyncModifyColumnFamilies(
-                cq, table_id, column_modification_list);
+                table_id, column_modification_list);
           })
           .then([&](future<StatusOr<btadmin::Table>> fut) {
             StatusOr<btadmin::Table> get_result = fut.get();
@@ -133,12 +129,12 @@ TEST_F(AdminAsyncFutureIntegrationTest, CreateListGetDeleteTableTest) {
             EXPECT_TRUE(gc.has_intersection());
             EXPECT_EQ(2, gc.intersection().rules_size());
 
-            return table_admin_->AsyncDeleteTable(cq, table_id);
+            return table_admin_->AsyncDeleteTable(table_id);
           })
           .then([&](future<Status> fut) {
             Status delete_result = fut.get();
             EXPECT_STATUS_OK(delete_result);
-            return table_admin_->AsyncListTables(cq, btadmin::Table::NAME_ONLY);
+            return table_admin_->AsyncListTables(btadmin::Table::NAME_ONLY);
           })
           .then([&](future<StatusOr<std::vector<btadmin::Table>>> fut) {
             StatusOr<std::vector<btadmin::Table>> result = fut.get();
@@ -153,17 +149,11 @@ TEST_F(AdminAsyncFutureIntegrationTest, CreateListGetDeleteTableTest) {
 
   chain.get();
   SUCCEED();  // we expect that previous operations do not fail.
-
-  cq.Shutdown();
-  pool.join();
 }
 
 /// @test Verify that `bigtable::TableAdmin` AsyncDropRowsByPrefix works
 TEST_F(AdminAsyncFutureIntegrationTest, AsyncDropRowsByPrefixTest) {
   auto table = GetTable();
-
-  CompletionQueue cq;
-  std::thread pool([&cq] { cq.Run(); });
 
   // Create a vector of cell which will be inserted into bigtable
   std::string const row_key1_prefix = "DropRowPrefix1";
@@ -189,7 +179,7 @@ TEST_F(AdminAsyncFutureIntegrationTest, AsyncDropRowsByPrefixTest) {
   future<void> chain =
       table_admin_
           ->AsyncDropRowsByPrefix(
-              cq, bigtable::testing::TableTestEnvironment::table_id(),
+              bigtable::testing::TableTestEnvironment::table_id(),
               row_key1_prefix)
           .then([&](future<Status> fut) {
             Status delete_result = fut.get();
@@ -201,16 +191,11 @@ TEST_F(AdminAsyncFutureIntegrationTest, AsyncDropRowsByPrefixTest) {
 
   chain.get();
   SUCCEED();
-  cq.Shutdown();
-  pool.join();
 }
 
 /// @test Verify that `bigtable::TableAdmin` AsyncDropAllRows works
 TEST_F(AdminAsyncFutureIntegrationTest, AsyncDropAllRowsTest) {
   auto table = GetTable();
-
-  CompletionQueue cq;
-  std::thread pool([&cq] { cq.Run(); });
 
   // Create a vector of cell which will be inserted into bigtable
   std::string const row_key1 = "DropRowKey1";
@@ -228,7 +213,7 @@ TEST_F(AdminAsyncFutureIntegrationTest, AsyncDropAllRowsTest) {
   future<void> chain =
       table_admin_
           ->AsyncDropAllRows(
-              cq, bigtable::testing::TableTestEnvironment::table_id())
+              bigtable::testing::TableTestEnvironment::table_id())
           .then([&](future<Status> fut) {
             Status delete_result = fut.get();
             EXPECT_STATUS_OK(delete_result);
@@ -239,8 +224,6 @@ TEST_F(AdminAsyncFutureIntegrationTest, AsyncDropAllRowsTest) {
 
   chain.get();
   SUCCEED();
-  cq.Shutdown();
-  pool.join();
 }
 
 /// @test Verify that `bigtable::TableAdmin` AsyncCheckConsistency works as
@@ -299,9 +282,6 @@ TEST_F(AdminAsyncFutureIntegrationTest, AsyncCheckConsistencyIntegrationTest) {
       {row_key2, column_family3, "column_id3", 3000, "v-c1-0-2"},
   };
 
-  CompletionQueue cq;
-  std::thread pool([&cq] { cq.Run(); });
-
   future<Status> chain =
       instance_admin.AsyncCreateInstance(config)
           .then([&](future<StatusOr<btadmin::Instance>> fut) {
@@ -311,7 +291,7 @@ TEST_F(AdminAsyncFutureIntegrationTest, AsyncCheckConsistencyIntegrationTest) {
               return make_ready_future(
                   StatusOr<btadmin::Table>(result.status()));
             }
-            return table_admin.AsyncCreateTable(cq, table_id, table_config);
+            return table_admin.AsyncCreateTable(table_id, table_config);
           })
           .then([&](future<StatusOr<btadmin::Table>> fut) {
             StatusOr<btadmin::Table> result = fut.get();
@@ -321,7 +301,7 @@ TEST_F(AdminAsyncFutureIntegrationTest, AsyncCheckConsistencyIntegrationTest) {
             }
             EXPECT_THAT(result->name(), ::testing::HasSubstr(table_id));
             CreateCells(table, created_cells);
-            return table_admin.AsyncGenerateConsistencyToken(cq, table_id);
+            return table_admin.AsyncGenerateConsistencyToken(table_id);
           })
           .then([&](future<StatusOr<std::string>> fut) {
             auto token = fut.get();
@@ -329,7 +309,7 @@ TEST_F(AdminAsyncFutureIntegrationTest, AsyncCheckConsistencyIntegrationTest) {
             if (!token) {
               return make_ready_future(StatusOr<Consistency>(token.status()));
             }
-            return table_admin.AsyncWaitForConsistency(cq, table_id, *token);
+            return table_admin.AsyncWaitForConsistency(table_id, *token);
           })
           .then([&](future<StatusOr<Consistency>> fut) {
             auto result = fut.get();
@@ -340,7 +320,7 @@ TEST_F(AdminAsyncFutureIntegrationTest, AsyncCheckConsistencyIntegrationTest) {
             // If there is an error we cannot check the result, but
             // we want to delete the table and continue.
             EXPECT_EQ(*result, Consistency::kConsistent);
-            return table_admin.AsyncDeleteTable(cq, table_id);
+            return table_admin.AsyncDeleteTable(table_id);
           })
           .then([&](future<Status> fut) {
             Status delete_result = fut.get();
@@ -350,8 +330,6 @@ TEST_F(AdminAsyncFutureIntegrationTest, AsyncCheckConsistencyIntegrationTest) {
 
   auto status = chain.get();
   EXPECT_STATUS_OK(status);
-  cq.Shutdown();
-  pool.join();
 }
 
 }  // namespace
