@@ -91,8 +91,7 @@ class CommonClient {
   explicit CommonClient(bigtable::ClientOptions options)
       : options_(std::move(options)),
         current_index_(0),
-        background_threads_(
-            google::cloud::internal::DefaultBackgroundThreads(1)),
+        background_threads_(options_.background_threads_factory()()),
         cq_(std::make_shared<CompletionQueue>(background_threads_->cq())),
         refresh_state_(std::make_shared<ConnectionRefreshState>(
             options_.max_conn_refresh_period())) {}
@@ -131,6 +130,8 @@ class CommonClient {
   }
 
   ClientOptions& Options() { return options_; }
+
+  CompletionQueue const& cq() { return *cq_; }
 
  private:
   /// Make sure the connections exit, and create them if needed.
