@@ -53,6 +53,8 @@ class LoggingDataClient : public DataClient {
 
   void reset() override { child_->reset(); }
 
+  ClientOptions const& Options() override { return child_->Options(); }
+
   grpc::Status MutateRow(grpc::ClientContext* context,
                          btproto::MutateRowRequest const& request,
                          btproto::MutateRowResponse* response) override;

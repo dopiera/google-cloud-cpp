@@ -47,6 +47,7 @@ class InProcessDataClient : public bigtable::DataClient {
   std::string const& instance_id() const override { return instance_; }
   std::shared_ptr<grpc::Channel> Channel() override { return channel_; }
   void reset() override {}
+  ClientOptions const& Options() override { return options_; }
 
   std::unique_ptr<google::bigtable::v2::Bigtable::Stub> Stub() {
     return google::bigtable::v2::Bigtable::NewStub(Channel());
@@ -131,6 +132,7 @@ class InProcessDataClient : public bigtable::DataClient {
   std::string project_;
   std::string instance_;
   std::shared_ptr<grpc::Channel> channel_;
+  ClientOptions options_;
 };
 
 }  // namespace testing
