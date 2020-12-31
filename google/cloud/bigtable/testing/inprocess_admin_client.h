@@ -35,8 +35,11 @@ namespace testing {
 class InProcessAdminClient : public bigtable::AdminClient {
  public:
   InProcessAdminClient(std::string project,
-                       std::shared_ptr<grpc::Channel> channel)
-      : project_(std::move(project)), channel_(std::move(channel)) {}
+                       std::shared_ptr<grpc::Channel> channel,
+                       CompletionQueue cq)
+      : project_(std::move(project)),
+        channel_(std::move(channel)),
+        cq_(std::move(cq)) {}
 
   std::unique_ptr<
       google::bigtable::admin::v2::BigtableTableAdmin::StubInterface>
@@ -46,6 +49,7 @@ class InProcessAdminClient : public bigtable::AdminClient {
 
   std::string const& project() const override { return project_; }
   std::shared_ptr<grpc::Channel> Channel() override { return channel_; }
+  CompletionQueue cq() override { return cq_; }
   void reset() override {}
 
   //@{
@@ -231,6 +235,7 @@ class InProcessAdminClient : public bigtable::AdminClient {
  private:
   std::string project_;
   std::shared_ptr<grpc::Channel> channel_;
+  CompletionQueue cq_;
 };
 
 }  // namespace testing

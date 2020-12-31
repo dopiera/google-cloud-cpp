@@ -154,6 +154,7 @@ class DefaultAdminClient : public google::cloud::bigtable::AdminClient {
 
   std::string const& project() const override { return project_; }
   std::shared_ptr<grpc::Channel> Channel() override { return impl_.Channel(); }
+  CompletionQueue cq() override { return impl_.cq(); }
   void reset() override { return impl_.reset(); }
 
   grpc::Status CreateTable(grpc::ClientContext* context,

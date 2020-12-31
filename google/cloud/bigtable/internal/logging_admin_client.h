@@ -55,6 +55,8 @@ class LoggingAdminClient : public google::cloud::bigtable::AdminClient {
 
   void reset() override { child_->reset(); }
 
+  CompletionQueue cq() override { return child_->cq(); }
+
   grpc::Status CreateTable(grpc::ClientContext* context,
                            btadmin::CreateTableRequest const& request,
                            btadmin::Table* response) override;
