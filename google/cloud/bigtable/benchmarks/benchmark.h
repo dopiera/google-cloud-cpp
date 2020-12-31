@@ -117,6 +117,9 @@ class Benchmark {
   int read_rows_count() const;
   //@}
 
+  /// The completion queue used for this benchmark's async operations.
+  CompletionQueue cq() const { return cq_; }
+
  private:
   /// Populate the table rows in the range [@p begin, @p end)
   google::cloud::StatusOr<BenchmarkResult> PopulateTableShard(
@@ -130,6 +133,7 @@ class Benchmark {
 
   BenchmarkSetup setup_;
   int key_width_;
+  CompletionQueue cq_;
   bigtable::ClientOptions client_options_;
   std::unique_ptr<EmbeddedServer> server_;
   std::thread server_thread_;

@@ -55,8 +55,8 @@ void EmbeddedServerTestFixture::SetUp() {
 
   std::shared_ptr<grpc::Channel> data_channel =
       server_->InProcessChannel(channel_arguments);
-  data_client_ = std::make_shared<InProcessDataClient>(project_id, instance_id,
-                                                       std::move(data_channel));
+  data_client_ = std::make_shared<InProcessDataClient>(
+      project_id, instance_id, std::move(data_channel), CompletionQueue{});
   table_ = std::make_shared<bigtable::Table>(data_client_, std::move(table_id));
 
   std::shared_ptr<grpc::Channel> admin_channel =

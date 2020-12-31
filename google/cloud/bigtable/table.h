@@ -389,9 +389,6 @@ class Table {
    * (and then discards) the data in the mutation.  In general, a
    *     `SingleRowMutation` can be used to modify and/or delete
    * multiple cells, across different columns and column families.
-   * @param cq the completion queue that will execute the asynchronous
-   *    calls, the application must ensure that one or more threads are
-   *    blocked on `cq.Run()`.
    *
    * @par Idempotency
    * This operation is idempotent if the provided mutations are idempotent. Note
@@ -402,7 +399,7 @@ class Table {
    * @snippet data_async_snippets.cc async-apply
    */
 
-  future<Status> AsyncApply(SingleRowMutation mut, CompletionQueue& cq);
+  future<Status> AsyncApply(SingleRowMutation mut);
 
   /**
    * Attempts to apply mutations to multiple rows.
@@ -440,9 +437,6 @@ class Table {
    *     `BulkMutation` can modify multiple rows, and the modifications for each
    *     row can change (or create) multiple cells, across different columns and
    *     column families.
-   * @param cq the completion queue that will execute the asynchronous calls,
-   *     the application must ensure that one or more threads are blocked on
-   *     `cq.Run()`.
    *
    * @par Idempotency
    * This operation is idempotent if the provided mutations are idempotent. Note
@@ -457,8 +451,7 @@ class Table {
    * @par Example
    * @snippet data_async_snippets.cc bulk async-bulk-apply
    */
-  future<std::vector<FailedMutation>> AsyncBulkApply(BulkMutation mut,
-                                                     CompletionQueue& cq);
+  future<std::vector<FailedMutation>> AsyncBulkApply(BulkMutation mut);
 
   /**
    * Reads a set of rows from the table.
@@ -576,9 +569,6 @@ class Table {
    *     true
    * @param false_mutations the mutations which will be performed if @p filter
    *     is false
-   * @param cq the completion queue that will execute the asynchronous calls,
-   *     the application must ensure that one or more threads are blocked on
-   *     `cq.Run()`.
    *
    * @par Idempotency
    * This operation is always treated as non-idempotent.
@@ -593,7 +583,7 @@ class Table {
    */
   future<StatusOr<MutationBranch>> AsyncCheckAndMutateRow(
       std::string row_key, Filter filter, std::vector<Mutation> true_mutations,
-      std::vector<Mutation> false_mutations, CompletionQueue& cq);
+      std::vector<Mutation> false_mutations);
 
   /**
    * Sample of the row keys in the table, including approximate data sizes.
@@ -672,9 +662,6 @@ class Table {
    *     is not subject to any SLA or deprecation policy.
    *
    * @param row_key the row key on which modification will be performed
-   * @param cq the completion queue that will execute the asynchronous calls,
-   *     the application must ensure that one or more threads are blocked on
-   *     `cq.Run()`.
    *
    * @param rule to modify the row. Two types of rules are applied here
    *     AppendValue which will read the existing value and append the
@@ -698,14 +685,14 @@ class Table {
    */
   template <typename... Args>
   future<StatusOr<Row>> AsyncReadModifyWriteRow(
-      std::string row_key, CompletionQueue& cq,
-      bigtable::ReadModifyWriteRule rule, Args&&... rules) {
+      std::string row_key, bigtable::ReadModifyWriteRule rule,
+      Args&&... rules) {
     ::google::bigtable::v2::ReadModifyWriteRowRequest request;
     request.set_row_key(std::move(row_key));
     *request.add_rules() = std::move(rule).as_proto();
     AddRules(request, std::forward<Args>(rules)...);
 
-    return AsyncReadModifyWriteRowImpl(cq, std::move(request));
+    return AsyncReadModifyWriteRowImpl(std::move(request));
   }
 
   /**
@@ -715,9 +702,6 @@ class Table {
    *     Bigtable. These APIs might be changed in backward-incompatible ways. It
    *     is not subject to any SLA or deprecation policy.
    *
-   * @param cq the completion queue that will execute the asynchronous calls,
-   *     the application must ensure that one or more threads are blocked on
-   *     `cq.Run()`.
    * @param on_row the callback to be invoked on each successfully read row; it
    *     should be invocable with `Row` and return a future<bool>; the returned
    *     `future<bool>` should be satisfied with `true` when the user is ready
@@ -742,10 +726,10 @@ class Table {
    * @snippet data_async_snippets.cc async read rows
    */
   template <typename RowFunctor, typename FinishFunctor>
-  void AsyncReadRows(CompletionQueue& cq, RowFunctor on_row,
-                     FinishFunctor on_finish, RowSet row_set, Filter filter) {
+  void AsyncReadRows(RowFunctor on_row, FinishFunctor on_finish, RowSet row_set,
+                     Filter filter) {
     AsyncRowReader<RowFunctor, FinishFunctor>::Create(
-        cq, client_, app_profile_id_, table_name_, std::move(on_row),
+        client_->cq(), client_, app_profile_id_, table_name_, std::move(on_row),
         std::move(on_finish), std::move(row_set),
         AsyncRowReader<RowFunctor, FinishFunctor>::NO_ROWS_LIMIT,
         std::move(filter), clone_rpc_retry_policy(), clone_rpc_backoff_policy(),
@@ -760,9 +744,6 @@ class Table {
    *     Bigtable. These APIs might be changed in backward-incompatible ways. It
    *     is not subject to any SLA or deprecation policy.
    *
-   * @param cq the completion queue that will execute the asynchronous calls,
-   *     the application must ensure that one or more threads are blocked on
-   *     `cq.Run()`.
    * @param on_row the callback to be invoked on each successfully read row; it
    *     should be invocable with `Row` and return a future<bool>; the returned
    *     `future<bool>` should be satisfied with `true` when the user is ready
@@ -774,7 +755,7 @@ class Table {
    *     results are undefined
    * @param row_set the rows to read from.
    * @param rows_limit the maximum number of rows to read. Cannot be a negative
-   *     number or zero. Use `AsyncReadRows(CompletionQueue, RowSet, Filter)` to
+   *     number or zero. Use `AsyncReadRows(RowSet, Filter)` to
    *     read all matching rows.
    * @param filter is applied on the server-side to data in the rows.
    *
@@ -792,11 +773,10 @@ class Table {
    * @snippet data_async_snippets.cc async read rows with limit
    */
   template <typename RowFunctor, typename FinishFunctor>
-  void AsyncReadRows(CompletionQueue& cq, RowFunctor on_row,
-                     FinishFunctor on_finish, RowSet row_set,
+  void AsyncReadRows(RowFunctor on_row, FinishFunctor on_finish, RowSet row_set,
                      std::int64_t rows_limit, Filter filter) {
     AsyncRowReader<RowFunctor, FinishFunctor>::Create(
-        cq, client_, app_profile_id_, table_name_, std::move(on_row),
+        client_->cq(), client_, app_profile_id_, table_name_, std::move(on_row),
         std::move(on_finish), std::move(row_set), rows_limit, std::move(filter),
         clone_rpc_retry_policy(), clone_rpc_backoff_policy(),
         metadata_update_policy_,
@@ -810,9 +790,6 @@ class Table {
    *     Bigtable. These APIs might be changed in backward-incompatible ways. It
    *     is not subject to any SLA or deprecation policy.
    *
-   * @param cq the completion queue that will execute the asynchronous calls,
-   *     the application must ensure that one or more threads are blocked on
-   *     `cq.Run()`.
    * @param row_key the row to read.
    * @param filter a filter expression, can be used to select a subset of the
    *     column families and columns in the row.
@@ -835,8 +812,7 @@ class Table {
    * @par Example
    * @snippet data_async_snippets.cc async read row
    */
-  future<StatusOr<std::pair<bool, Row>>> AsyncReadRow(CompletionQueue& cq,
-                                                      std::string row_key,
+  future<StatusOr<std::pair<bool, Row>>> AsyncReadRow(std::string row_key,
                                                       Filter filter);
 
  private:
@@ -847,7 +823,6 @@ class Table {
       ::google::bigtable::v2::ReadModifyWriteRowRequest request);
 
   future<StatusOr<Row>> AsyncReadModifyWriteRowImpl(
-      CompletionQueue& cq,
       ::google::bigtable::v2::ReadModifyWriteRowRequest request);
 
   void AddRules(google::bigtable::v2::ReadModifyWriteRowRequest&) {

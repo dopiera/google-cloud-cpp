@@ -58,6 +58,7 @@ class DefaultDataClient : public DataClient {
 
   std::shared_ptr<grpc::Channel> Channel() override { return impl_.Channel(); }
   void reset() override { impl_.reset(); }
+  CompletionQueue cq() override { return impl_.cq(); }
 
   grpc::Status MutateRow(grpc::ClientContext* context,
                          btproto::MutateRowRequest const& request,

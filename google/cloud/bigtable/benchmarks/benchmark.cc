@@ -46,6 +46,7 @@ Benchmark::Benchmark(BenchmarkSetup setup)
   }
   client_options_.set_connection_pool_size(
       static_cast<std::size_t>(setup_.thread_count()));
+  client_options_.DisableBackgroundThreads(cq_);
 }
 
 Benchmark::~Benchmark() {
@@ -57,6 +58,8 @@ Benchmark::~Benchmark() {
     return;
   }
   server_thread_.join();
+  cq_.CancelAll();
+  cq_.Shutdown();
 }
 
 std::string Benchmark::CreateTable() {

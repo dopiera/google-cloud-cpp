@@ -25,6 +25,12 @@ namespace testing {
 
 class MockDataClient : public bigtable::DataClient {
  public:
+  explicit MockDataClient(CompletionQueue cq) : cq_(std::move(cq)) {}
+
+  // We need to override clang-tidy to not require the `override` keyword here
+  // because otherwise clang-3.8 will require `override` in all mocked methods.
+  CompletionQueue cq() { return cq_; }  // NOLINT(modernize-use-override)
+
   MOCK_CONST_METHOD0(project_id, std::string const&());
   MOCK_CONST_METHOD0(instance_id, std::string const&());
   MOCK_METHOD0(Channel, std::shared_ptr<grpc::Channel>());
@@ -112,6 +118,8 @@ class MockDataClient : public bigtable::DataClient {
                    grpc::ClientContext*,
                    const google::bigtable::v2::MutateRowsRequest&,
                    grpc::CompletionQueue*));
+
+  CompletionQueue cq_;
 };
 
 }  // namespace testing

@@ -105,7 +105,6 @@ class AsyncBenchmark {
         generator_(std::random_device{}()) {}
 
   ~AsyncBenchmark() {
-    cq_.Shutdown();
     for (auto& t : cq_threads_) {
       t.join();
     }
@@ -121,7 +120,6 @@ class AsyncBenchmark {
 
   std::mutex mu_;
   std::condition_variable cv_;
-  google::cloud::CompletionQueue cq_;
   std::vector<std::thread> cq_threads_;
   bigtable::benchmarks::Benchmark& benchmark_;
   bigtable::Table table_;
@@ -237,7 +235,7 @@ int main(int argc, char* argv[]) {
 namespace {
 
 void AsyncBenchmark::ActivateCompletionQueue() {
-  cq_threads_.emplace_back(std::thread([this] { cq_.Run(); }));
+  cq_threads_.emplace_back(std::thread([this] { benchmark_.cq().Run(); }));
 }
 
 BenchmarkResult AsyncBenchmark::Run(std::chrono::seconds test_duration,
@@ -265,9 +263,8 @@ void AsyncBenchmark::RunOneAsyncReadRow() {
 
   auto request_start = std::chrono::steady_clock::now();
   table_
-      .AsyncReadRow(cq_, row_key,
-                    bigtable::Filter::ColumnRangeClosed(kColumnFamily, "field0",
-                                                        "field9"))
+      .AsyncReadRow(row_key, bigtable::Filter::ColumnRangeClosed(
+                                 kColumnFamily, "field0", "field9"))
       .then([this, request_start](
                 future<StatusOr<std::pair<bool, bigtable::Row>>> f) {
         OnReadRow(request_start, f.get());
